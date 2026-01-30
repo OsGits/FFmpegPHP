@@ -42,6 +42,7 @@ $paged_files = array_slice($server_files, $start_index, $page_size);
             <p>如果有需要转码切片的视频，请上传到待转目录：</p>
             <p style="font-weight: bold; color: blue;"><?php echo UPLOAD_DIR; ?></p>
             <small>支持格式: <?php echo implode(', ', $allowed_extensions); ?></small>
+            <small>为了考虑系统识别文件的正确性，建议视频文件名不要有特殊符号。</small>
         </div>
     </div>
 

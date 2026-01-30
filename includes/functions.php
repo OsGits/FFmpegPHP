@@ -72,14 +72,23 @@ function get_server_files() {
             // 在Windows系统上，转换文件名编码为UTF-8
             if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
                 $file_utf8 = iconv('GBK', 'UTF-8//IGNORE', $file);
-                $file_path = UPLOAD_DIR . '/' . $file; // 原始GBK文件名
+                // 构建正确的文件路径，避免双斜杠
+                $file_path = rtrim(UPLOAD_DIR, '/') . '/' . $file;
             } else {
                 $file_utf8 = $file;
-                $file_path = UPLOAD_DIR . '/' . $file;
+                $file_path = rtrim(UPLOAD_DIR, '/') . '/' . $file;
             }
             
             if (validate_extension($file_utf8)) {
-                $file_time = file_exists($file_path) ? filemtime($file_path) : 0;
+                // 安全地获取文件修改时间，避免open_basedir限制错误
+                $file_time = 0;
+                try {
+                    if (file_exists($file_path)) {
+                        $file_time = filemtime($file_path);
+                    }
+                } catch (Exception $e) {
+                    // 忽略错误，设置默认值
+                }
                 $files[] = [
                     'name' => $file_utf8,
                     'time' => $file_time
