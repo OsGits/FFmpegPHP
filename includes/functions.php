@@ -498,4 +498,11 @@ function get_completed_transcode_records() {
     
     return array_reverse($completed); // 按时间倒序排列
 }
+
+// 清理转码记录
+function clear_transcode_records() {
+    $record_file = get_transcode_record_file();
+    // 写入空数组到记录文件
+    return file_put_contents($record_file, json_encode([], JSON_PRETTY_PRINT));
+}
 ?>

@@ -5,6 +5,14 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/includes/functions.php';
 
+// 处理清理记录请求
+if (isset($_POST['clear_records'])) {
+    clear_transcode_records();
+    // 重定向以刷新页面
+    header('Location: history.php');
+    exit;
+}
+
 // 检查是否有正在转码的任务
 $current_transcode = get_current_transcode_task();
 
@@ -80,7 +88,12 @@ $completed_transcodes = get_completed_transcode_records();
 
     <!-- 已完成转码记录 -->
     <div class="card">
-        <h2>已完成转码记录</h2>
+        <div class="card-header">
+            <h2>已完成转码记录</h2>
+            <form method="post" onsubmit="return confirm('确定要清理所有转码记录吗？此操作不可恢复。');">
+                <button type="submit" name="clear_records" class="clear-btn">清理记录</button>
+            </form>
+        </div>
         <?php 
         // 限制只显示30条记录
         $limited_transcodes = array_slice($completed_transcodes, 0, 30);
@@ -210,6 +223,12 @@ function copyToClipboard(element, fullUrl) {
     .url-display {
         margin-bottom: 10px;
     }
+    
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
 }
 
 /* 转码记录样式 */
@@ -323,6 +342,29 @@ code {
     padding: 2px 8px;
     border-radius: 4px;
     font-size: 12px;
+}
+
+/* 卡片头部样式 */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.clear-btn {
+    padding: 8px 16px;
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.clear-btn:hover {
+    background-color: #c0392b;
 }
 </style>
 

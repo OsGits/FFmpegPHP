@@ -143,39 +143,20 @@ $transcode_options = [
 $record_id = record_transcode_start($input_file, $transcode_options);
 
 // 直接执行转码过程，不使用后台执行，以便查看详细的错误信息
-$log_path = __DIR__ . '/logs/transcode_' . $record_id . '.log';
 
-// 确保日志目录存在
-ensure_dir(__DIR__ . '/logs');
-
-// 添加详细的调试信息
-$debug_log = __DIR__ . '/logs/debug_' . $record_id . '.log';
-file_put_contents($debug_log, "开始直接执行转码: " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
-file_put_contents($debug_log, "记录ID: $record_id\n", FILE_APPEND);
-file_put_contents($debug_log, "输入路径: $input_path\n", FILE_APPEND);
-file_put_contents($debug_log, "输出目录: $final_output_dir_gbk\n", FILE_APPEND);
-file_put_contents($debug_log, "切片时长: $segment_duration\n", FILE_APPEND);
-file_put_contents($debug_log, "画质: $quality\n", FILE_APPEND);
-file_put_contents($debug_log, "转码方式: $transcode_method\n", FILE_APPEND);
-file_put_contents($debug_log, "基础地址: $base_url\n", FILE_APPEND);
-file_put_contents($debug_log, "视频文件名: $video_filename\n", FILE_APPEND);
+// 记录开始时间
+$start_time = microtime(true);
 
 // 直接执行转码
-file_put_contents($debug_log, "开始执行转码...\n", FILE_APPEND);
 $transcode_result = transcode_video($input_path, $final_output_dir_gbk, $segment_duration, $quality, $transcode_method);
-file_put_contents($debug_log, "转码执行完成\n", FILE_APPEND);
 
 // 检查转码是否成功
 if (isset($transcode_result['error'])) {
-    file_put_contents($debug_log, "转码失败: " . $transcode_result['error'] . "\n", FILE_APPEND);
     // 记录转码失败
     record_transcode_failed($record_id, $transcode_result['error']);
 } else {
-    file_put_contents($debug_log, "转码成功\n", FILE_APPEND);
     // 生成视频截图
-    file_put_contents($debug_log, "开始生成视频截图...\n", FILE_APPEND);
     generate_screenshot($input_path, $final_output_dir_gbk, 10);
-    file_put_contents($debug_log, "视频截图生成完成\n", FILE_APPEND);
     
     // 计算文件大小
     $file_size = 0;
@@ -190,35 +171,25 @@ if (isset($transcode_result['error'])) {
     }
     closedir($dir);
     $file_size_mb = round($file_size / 1024 / 1024, 2);
-    file_put_contents($debug_log, "文件大小: $file_size_mb MB\n", FILE_APPEND);
     
     // 计算转码时间
     $end_time = microtime(true);
     $transcode_time = round($end_time - $start_time, 2);
-    file_put_contents($debug_log, "转码时间: $transcode_time 秒\n", FILE_APPEND);
     
     // 记录转码完成
     record_transcode_complete($record_id, $file_size_mb, $transcode_time);
-    file_put_contents($debug_log, "转码记录已更新\n", FILE_APPEND);
     
     // 修改m3u8文件，更新TS文件路径
     $m3u8_file = $transcode_result['output_file'];
     if (file_exists($m3u8_file)) {
-        file_put_contents($debug_log, "开始更新M3U8文件...\n", FILE_APPEND);
         $m3u8_content = file_get_contents($m3u8_file);
         // 替换TS文件路径
         $encoded_video_filename = urlencode($video_filename);
         $new_m3u8_content = preg_replace('/(\d{6}\.ts)/', rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/$1', $m3u8_content);
         // 保存修改后的内容
         file_put_contents($m3u8_file, $new_m3u8_content);
-        file_put_contents($debug_log, "M3U8文件更新完成\n", FILE_APPEND);
-    } else {
-        file_put_contents($debug_log, "M3U8文件不存在: $m3u8_file\n", FILE_APPEND);
     }
 }
-
-// 记录转码完成时间
-file_put_contents($debug_log, "转码过程全部完成: " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
 
 // 跳转到历史页面
 sleep(2);

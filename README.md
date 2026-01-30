@@ -184,7 +184,6 @@ ffmpeg -i input.mp4 -ss 10 -vframes 1 output.jpg
 
 ## 版本信息
 
-- **当前版本**：V0.0.1
 - **开发环境**：PHP 7.4 + Windows 10 + FFmpeg 5.0+
 
 ## 注意事项
@@ -210,7 +209,7 @@ ffmpeg -i input.mp4 -ss 10 -vframes 1 output.jpg
 ## 联系方式
 
 如有问题或建议，欢迎联系我们：
-- 项目地址：e:\wwwroot\z.m
+- 项目地址：https://github.com/OsGits/FFmpegPHP
 - 技术支持：请查看项目文档和日志文件
 
 ---
