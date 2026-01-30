@@ -61,8 +61,13 @@ if (isset($transcode_result['error'])) {
     $end_time = microtime(true);
     $transcode_time = round($end_time - $start_time, 2);
     
+    // 构建图片地址和m3u8地址
+    $encoded_video_filename = urlencode($video_filename);
+    $image_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/index.jpg';
+    $m3u8_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/index.m3u8';
+    
     // 记录转码完成
-    record_transcode_complete($record_id, $file_size_mb, $transcode_time);
+    record_transcode_complete($record_id, $file_size_mb, $transcode_time, $image_url, $m3u8_url);
     
     // 修改m3u8文件，更新TS文件路径
     $m3u8_file = $transcode_result['output_file'];

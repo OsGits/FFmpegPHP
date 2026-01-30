@@ -416,16 +416,13 @@ function save_transcode_records($records) {
 function record_transcode_start($filename, $options) {
     $records = read_transcode_records();
     
+    // 只创建包含必要信息的记录
     $record = [
         'id' => uniqid(),
         'filename' => $filename,
-        'status' => 'processing',
-        'progress' => 0,
-        'options' => $options,
-        'start_time' => date('Y-m-d H:i:s'),
-        'end_time' => null,
-        'duration' => null,
-        'file_size' => null
+        'end_time' => '',
+        'image_url' => '',
+        'm3u8_url' => ''
     ];
     
     $records[] = $record;
@@ -435,77 +432,113 @@ function record_transcode_start($filename, $options) {
 
 // 更新转码进度
 function update_transcode_progress($record_id, $progress) {
-    $records = read_transcode_records();
-    
-    foreach ($records as &$record) {
-        if ($record['id'] === $record_id) {
-            $record['progress'] = min($progress, 100);
-            break;
-        }
-    }
-    
-    save_transcode_records($records);
+    // 由于我们只保存简洁记录，不需要更新进度
+    // 此函数保留仅为兼容性
 }
 
 // 记录转码完成
-function record_transcode_complete($record_id, $file_size, $duration) {
-    $records = read_transcode_records();
+function record_transcode_complete($record_id, $file_size, $duration, $image_url = '', $m3u8_url = '') {
+    // 读取现有记录
+    $existing_records = read_transcode_records();
     
-    foreach ($records as &$record) {
+    // 创建新的简洁记录数组
+    $new_records = [];
+    
+    // 处理每条记录
+    foreach ($existing_records as $record) {
+        // 如果是当前完成的记录，跳过，稍后将其放在数组开头
         if ($record['id'] === $record_id) {
-            $record['status'] = 'completed';
-            $record['progress'] = 100;
-            $record['end_time'] = date('Y-m-d H:i:s');
-            $record['duration'] = $duration;
-            $record['file_size'] = $file_size;
+            continue;
+        }
+        // 对于其他记录，只保留必要信息
+        $new_record = [
+            'filename' => $record['filename'],
+            'end_time' => $record['end_time'] ?? '',
+            'duration' => $record['duration'] ?? 0,
+            'file_size' => $record['file_size'] ?? 0,
+            'image_url' => $record['image_url'] ?? '',
+            'm3u8_url' => $record['m3u8_url'] ?? ''
+        ];
+        $new_records[] = $new_record;
+    }
+    
+    // 创建当前完成的记录，包含所有必要信息
+    // 查找原始记录以获取文件名
+    $original_filename = '';
+    foreach ($existing_records as $record) {
+        if ($record['id'] === $record_id) {
+            $original_filename = $record['filename'];
             break;
         }
     }
     
-    save_transcode_records($records);
+    // 创建新记录
+    $current_record = [
+        'filename' => $original_filename,
+        'end_time' => date('Y-m-d H:i:s'),
+        'duration' => $duration,
+        'file_size' => $file_size,
+        'image_url' => $image_url,
+        'm3u8_url' => $m3u8_url
+    ];
+    
+    // 将当前完成的记录放在数组开头
+    array_unshift($new_records, $current_record);
+    
+    // 保存简洁记录
+    save_transcode_records($new_records);
 }
 
 // 记录转码失败
 function record_transcode_failed($record_id, $error) {
-    $records = read_transcode_records();
+    // 读取现有记录
+    $existing_records = read_transcode_records();
     
-    foreach ($records as &$record) {
+    // 创建新的简洁记录数组
+    $new_records = [];
+    
+    // 处理每条记录
+    foreach ($existing_records as $record) {
+        // 如果是当前失败的记录
         if ($record['id'] === $record_id) {
-            $record['status'] = 'failed';
-            $record['error'] = $error;
-            $record['end_time'] = date('Y-m-d H:i:s');
-            break;
+            // 创建简洁记录，只包含必要信息
+            $new_record = [
+                'filename' => $record['filename'],
+                'end_time' => date('Y-m-d H:i:s'),
+                'image_url' => '',
+                'm3u8_url' => ''
+            ];
+            $new_records[] = $new_record;
+        } else {
+            // 对于其他记录，只保留必要信息
+            $new_record = [
+                'filename' => $record['filename'],
+                'end_time' => $record['end_time'] ?? '',
+                'image_url' => $record['image_url'] ?? '',
+                'm3u8_url' => $record['m3u8_url'] ?? ''
+            ];
+            $new_records[] = $new_record;
         }
     }
     
-    save_transcode_records($records);
+    // 保存简洁记录
+    save_transcode_records($new_records);
 }
 
 // 获取当前正在转码的任务
 function get_current_transcode_task() {
-    $records = read_transcode_records();
-    
-    foreach (array_reverse($records) as $record) {
-        if ($record['status'] === 'processing') {
-            return $record;
-        }
-    }
-    
+    // 由于我们只保存简洁记录，不再跟踪正在处理的任务
     return null;
 }
 
 // 获取已完成的转码记录
 function get_completed_transcode_records() {
     $records = read_transcode_records();
-    $completed = [];
-    
-    foreach ($records as $record) {
-        if (isset($record['status']) && $record['status'] === 'completed') {
-            $completed[] = $record;
-        }
-    }
-    
-    return array_reverse($completed); // 按时间倒序排列
+    // 所有记录都是简洁格式，直接返回并按时间倒序排列
+    usort($records, function($a, $b) {
+        return strcmp($b['end_time'], $a['end_time']);
+    });
+    return $records;
 }
 
 // 清理转码记录

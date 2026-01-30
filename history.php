@@ -98,61 +98,13 @@ $completed_transcodes = get_completed_transcode_records();
         // 限制只显示30条记录
         $limited_transcodes = array_slice($completed_transcodes, 0, 30);
         if (!empty($limited_transcodes)): ?>
-            <ul class="transcode-list">
-                <?php foreach ($limited_transcodes as $transcode): ?>
-                    <li class="transcode-item">
-                        <div class="transcode-info">
-                            <strong>视频名:</strong> <?php echo htmlspecialchars($transcode['filename']); ?>
-                        </div>
-                        <div class="transcode-meta">
-                            <span class="meta-item"><strong>大小:</strong> <?php echo isset($transcode['file_size']) ? $transcode['file_size'] : '0'; ?> MB</span>
-                            <span class="meta-item"><strong>时长:</strong> <?php echo isset($transcode['duration']) ? format_time($transcode['duration']) : '00:00:00'; ?></span>
-                            <span class="meta-item"><strong>转码时间:</strong> <?php echo isset($transcode['end_time']) ? $transcode['end_time'] : '未知'; ?></span>
-                            <span class="meta-item status-success"><strong>状态:</strong> 成功</span>
-                        </div>
-                        <div class="transcode-url">
-                            <strong>M3U8地址:</strong> 
-                            <?php 
-                            // 构建完整地址
-                            $base_url = isset($transcode['options']['base_url']) ? $transcode['options']['base_url'] : '';
-                            $folder_name = pathinfo($transcode['filename'], PATHINFO_FILENAME);
-                            $full_url = rtrim($base_url, '/') . '/m3u8/' . $folder_name . '/index.m3u8';
-                            
-                            // 生成省略号版本的地址
-                            $display_url = $full_url;
-                            if (strlen($full_url) > 50) {
-                                $start = substr($full_url, 0, 20);
-                                $end = substr($full_url, -20);
-                                $display_url = $start . '...' . $end;
-                            }
-                            ?>
-                            <span class="url-display" data-full-url="<?php echo htmlspecialchars($full_url); ?>" onclick="copyToClipboard(this)">
-                                <?php echo htmlspecialchars($display_url); ?>
-                            </span>
-                            <button class="copy-btn" onclick="copyToClipboard(this, '<?php echo htmlspecialchars($full_url); ?>')">复制</button>
-                        </div>
-                        <div class="transcode-url">
-                            <strong>图片地址:</strong> 
-                            <?php 
-                            // 构建完整地址
-                            $image_url = rtrim($base_url, '/') . '/m3u8/' . $folder_name . '/index.jpg';
-                            
-                            // 生成省略号版本的地址
-                            $display_image_url = $image_url;
-                            if (strlen($image_url) > 50) {
-                                $start = substr($image_url, 0, 20);
-                                $end = substr($image_url, -20);
-                                $display_image_url = $start . '...' . $end;
-                            }
-                            ?>
-                            <span class="url-display" data-full-url="<?php echo htmlspecialchars($image_url); ?>" onclick="copyToClipboard(this)">
-                                <?php echo htmlspecialchars($display_image_url); ?>
-                            </span>
-                            <button class="copy-btn" onclick="copyToClipboard(this, '<?php echo htmlspecialchars($image_url); ?>')">复制</button>
-                        </div>
-                    </li>
+            <div class="json-records">
+                <?php foreach ($limited_transcodes as $index => $transcode): ?>
+                    <div class="json-record" onclick="selectCode(this)">
+                        <pre><?php echo json_encode($transcode, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?><?php echo ($index < count($limited_transcodes) - 1) ? ',' : ''; ?></pre>
+                    </div>
                 <?php endforeach; ?>
-            </ul>
+            </div>
             <div class="note">
                 <strong>提示:</strong> 记录只显示30条，多余记录可前往 <code>e:\wwwroot\z.m\ting.json</code> 查看
             </div>
@@ -199,6 +151,16 @@ function copyToClipboard(element, fullUrl) {
         console.error('复制失败:', err);
         alert('复制失败，请手动复制');
     });
+}
+
+// 点击代码框自动全选
+function selectCode(element) {
+    const pre = element.querySelector('pre');
+    const range = document.createRange();
+    range.selectNodeContents(pre);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
 }
 </script>
 
@@ -365,6 +327,43 @@ code {
 
 .clear-btn:hover {
     background-color: #c0392b;
+}
+
+/* JSON 代码块样式 */
+.json-records {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.json-record {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 15px;
+    overflow-x: auto;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.json-record:hover {
+    border-color: #3498db;
+    box-shadow: 0 2px 4px rgba(52, 152, 219, 0.1);
+}
+
+.json-record pre {
+    margin: 0;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #343a40;
+}
+
+.json-record pre code {
+    background-color: transparent;
+    padding: 0;
+    border-radius: 0;
 }
 </style>
 

@@ -176,15 +176,19 @@ if (isset($transcode_result['error'])) {
     $end_time = microtime(true);
     $transcode_time = round($end_time - $start_time, 2);
     
+    // 构建图片地址和m3u8地址
+    $encoded_video_filename = urlencode($video_filename);
+    $image_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/index.jpg';
+    $m3u8_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/index.m3u8';
+    
     // 记录转码完成
-    record_transcode_complete($record_id, $file_size_mb, $transcode_time);
+    record_transcode_complete($record_id, $file_size_mb, $transcode_time, $image_url, $m3u8_url);
     
     // 修改m3u8文件，更新TS文件路径
     $m3u8_file = $transcode_result['output_file'];
     if (file_exists($m3u8_file)) {
         $m3u8_content = file_get_contents($m3u8_file);
         // 替换TS文件路径
-        $encoded_video_filename = urlencode($video_filename);
         $new_m3u8_content = preg_replace('/(\d{6}\.ts)/', rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/$1', $m3u8_content);
         // 保存修改后的内容
         file_put_contents($m3u8_file, $new_m3u8_content);
@@ -360,11 +364,16 @@ exit;
             }
             $file_size_mb = round($file_size / 1024 / 1024, 2);
             
+            // 构建图片地址和m3u8地址
+            $encoded_video_filename = urlencode($video_filename);
+            $image_url = rtrim($base_url, '/') . '/' . $encoded_video_filename . '/index.jpg';
+            $m3u8_url = rtrim($base_url, '/') . '/' . $encoded_video_filename . '/index.m3u8';
+            
             // 更新进度
             update_transcode_progress($record_id, 100);
             
             // 记录转码完成
-            record_transcode_complete($record_id, $file_size_mb, $process_time);
+            record_transcode_complete($record_id, $file_size_mb, $process_time, $image_url, $m3u8_url);
         }
         
         // 刷新输出
