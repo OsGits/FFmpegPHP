@@ -53,7 +53,7 @@ $paged_files = array_slice($server_files, $start_index, $page_size);
         <div class="form-group">
             <label>当前转码设置</label>
             <div style="background-color: #f5f5f5; padding: 15px; border-radius: 4px;">
-                <div><strong>基础地址:</strong> <?php echo htmlspecialchars($base_url); ?></div>
+                <div><strong>TS文件路径设置:</strong> <?php echo htmlspecialchars($base_url); ?></div>
                 <div><strong>切片时长:</strong> <?php echo $default_segment_duration; ?> 秒</div>
                 <div><strong>截图时间点:</strong> <?php echo $default_screenshot_time; ?> 秒</div>
                 <div><strong>画质选择:</strong> <?php echo $default_quality; ?></div>

@@ -160,8 +160,10 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
     // 确保输出目录存在
     ensure_dir($output_dir);
     
-    // 生成输出文件名 - 使用index.m3u8
-    $output_file = $output_dir . '/index.m3u8';
+    // 从输入文件名中提取文件名（不含扩展名）
+    $filename = pathinfo($input_file, PATHINFO_FILENAME);
+    // 生成输出文件名 - 使用文件名.m3u8
+    $output_file = $output_dir . '/' . $filename . '.m3u8';
     
     // 获取GPU加速参数
     $gpu_param = $gpu_acceleration[$gpu_method] ?? '';
@@ -275,8 +277,10 @@ function generate_screenshot($input_file, $output_dir, $time = 10) {
     // 确保输出目录存在
     ensure_dir($output_dir);
     
-    // 生成输出文件名 - 使用index.jpg
-    $output_file = $output_dir . '/index.jpg';
+    // 从输入文件名中提取文件名（不含扩展名）
+    $filename = pathinfo($input_file, PATHINFO_FILENAME);
+    // 生成输出文件名 - 使用文件名.jpg
+    $output_file = $output_dir . '/' . $filename . '.jpg';
     
     // 构建FFmpeg命令
     $command = "-i \"$input_file\" -ss $time -vframes 1 -q:v 2 \"$output_file\"";
@@ -412,18 +416,29 @@ function save_transcode_records($records) {
     return file_put_contents($record_file, $content);
 }
 
+// 获取当前转码任务文件路径
+function get_current_transcode_file() {
+    return ROOT_DIR . '/current_transcode.json';
+}
+
 // 记录转码开始
 function record_transcode_start($filename, $options) {
     $records = read_transcode_records();
     
-    // 只创建包含必要信息的记录
+    // 创建包含必要信息的记录
     $record = [
         'id' => uniqid(),
         'filename' => $filename,
+        'start_time' => date('Y-m-d H:i:s'),
         'end_time' => '',
         'image_url' => '',
-        'm3u8_url' => ''
+        'm3u8_url' => '',
+        'options' => $options
     ];
+    
+    // 保存到临时文件，用于跟踪当前转码任务
+    $current_transcode_file = get_current_transcode_file();
+    file_put_contents($current_transcode_file, json_encode($record));
     
     $records[] = $record;
     save_transcode_records($records);
@@ -487,6 +502,12 @@ function record_transcode_complete($record_id, $file_size, $duration, $image_url
     
     // 保存简洁记录
     save_transcode_records($new_records);
+    
+    // 删除临时文件，清除当前转码任务跟踪
+    $current_transcode_file = get_current_transcode_file();
+    if (file_exists($current_transcode_file)) {
+        unlink($current_transcode_file);
+    }
 }
 
 // 记录转码失败
@@ -523,11 +544,21 @@ function record_transcode_failed($record_id, $error) {
     
     // 保存简洁记录
     save_transcode_records($new_records);
+    
+    // 删除临时文件，清除当前转码任务跟踪
+    $current_transcode_file = get_current_transcode_file();
+    if (file_exists($current_transcode_file)) {
+        unlink($current_transcode_file);
+    }
 }
 
 // 获取当前正在转码的任务
 function get_current_transcode_task() {
-    // 由于我们只保存简洁记录，不再跟踪正在处理的任务
+    $current_transcode_file = get_current_transcode_file();
+    if (file_exists($current_transcode_file)) {
+        $content = file_get_contents($current_transcode_file);
+        return json_decode($content, true) ?? null;
+    }
     return null;
 }
 

@@ -43,7 +43,7 @@ $gpu_info = $system_info['gpu'];
             <strong>转码后保存目录:</strong> <?php echo OUTPUT_DIR; ?> (<?php echo is_writable(OUTPUT_DIR) ? '可写' : '不可写'; ?>)
         </div>
         <div>
-            <strong>基础地址:</strong> <?php echo htmlspecialchars($base_url); ?>
+            <strong>TS文件路径设置:</strong> <?php echo htmlspecialchars($base_url); ?>
         </div>
         <div>
             <strong>切片时长:</strong> <?php echo $default_segment_duration; ?> 秒

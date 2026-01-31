@@ -94,6 +94,7 @@ $ffmpeg_status = test_ffmpeg_path($current_ffmpeg_path) ? '可用' : '不可用'
                 <label for="ffmpeg_path">FFmpeg路径</label>
                 <input type="text" id="ffmpeg_path" name="ffmpeg_path" value="<?php echo htmlspecialchars($current_ffmpeg_path); ?>" placeholder="例如: C:/ffmpeg/bin/ffmpeg.exe">
                 <small>如果已添加到系统PATH，可直接使用 'ffmpeg'</small>
+                <small>这里是ffmpeg程序路径，不是目录路径，需要包含ffmpeg.exe文件</small>
             </div>
             
 
@@ -111,9 +112,10 @@ $ffmpeg_status = test_ffmpeg_path($current_ffmpeg_path) ? '可用' : '不可用'
             </div>
             
             <div class="form-group">
-                <label for="base_url">基础地址</label>
+                <label for="base_url">TS文件路径设置</label>
                 <input type="text" id="base_url" name="base_url" value="<?php echo htmlspecialchars($current_base_url); ?>" placeholder="例如: http://your-domain/output/ 结尾加‘/’">
-                <small>TS文件的基础访问地址，会添加到m3u8文件中的每个TS文件路径前</small>
+                <small>TS文件的基础访问地址，会添加到m3u8文件中的每个TS文件路径前！</small>
+                <small>最终在m3u8文件中合成的路径为：http(s)://TS文件基础地址/转码后保存目录/视频文件名/index.m3u8</small>
             </div>
             
             <div class="form-group">

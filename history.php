@@ -43,7 +43,7 @@ $completed_transcodes = get_completed_transcode_records();
                         // 构建完整地址
                         $base_url = isset($current_transcode['options']['base_url']) ? $current_transcode['options']['base_url'] : '';
                         $folder_name = pathinfo($current_transcode['filename'], PATHINFO_FILENAME);
-                        $full_url = rtrim($base_url, '/') . '/m3u8/' . $folder_name . '/index.m3u8';
+                        $full_url = rtrim($base_url, '/') . '/m3u8/' . $folder_name . '/' . $folder_name . '.m3u8';
                         
                         // 生成省略号版本的地址
                         $display_url = $full_url;
@@ -62,7 +62,7 @@ $completed_transcodes = get_completed_transcode_records();
                         <strong>图片地址:</strong> 
                         <?php 
                         // 构建完整地址
-                        $image_url = rtrim($base_url, '/') . '/m3u8/' . $folder_name . '/index.jpg';
+                        $image_url = rtrim($base_url, '/') . '/m3u8/' . $folder_name . '/' . $folder_name . '.jpg';
                         
                         // 生成省略号版本的地址
                         $display_image_url = $image_url;

@@ -37,7 +37,7 @@ $transcode_method = $use_gpu ? $gpu_info['default'] : 'none';
 $errors = [];
 
 if (empty($base_url)) {
-    $errors[] = '基础地址不能为空';
+    $errors[] = 'TS文件路径设置不能为空';
 }
 
 if (empty($input_file)) {
@@ -178,8 +178,8 @@ if (isset($transcode_result['error'])) {
     
     // 构建图片地址和m3u8地址
     $encoded_video_filename = urlencode($video_filename);
-    $image_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/index.jpg';
-    $m3u8_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/index.m3u8';
+    $image_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/' . urlencode($video_filename) . '.jpg';
+    $m3u8_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/' . urlencode($video_filename) . '.m3u8';
     
     // 记录转码完成
     record_transcode_complete($record_id, $file_size_mb, $transcode_time, $image_url, $m3u8_url);
