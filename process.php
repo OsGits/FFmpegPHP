@@ -181,6 +181,88 @@ if (isset($transcode_result['error'])) {
     $image_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/' . urlencode($video_filename) . '.jpg';
     $m3u8_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/' . urlencode($video_filename) . '.m3u8';
     
+    // 尝试保存到数据库
+    try {
+        // 读取配置文件
+        $configFile = dirname(__FILE__) . '/config.json';
+        if (file_exists($configFile)) {
+            $config = json_decode(file_get_contents($configFile), true);
+            
+            // 检查数据库功能是否启用
+            if (isset($config['mysql_enabled']) && $config['mysql_enabled'] == 1) {
+                // 包含数据库操作类
+                require_once dirname(__FILE__) . '/mysql/database.php';
+                
+                // 创建数据库实例
+                $db = new Database($config);
+                
+                // 构建完整的链接 - 使用m3u8_full_url
+                $m3u8_full_url = $config['m3u8_full_url'] ?? '';
+                if (!empty($m3u8_full_url)) {
+                    // 使用配置的完整链接作为基础
+                    $final_image_url = rtrim($m3u8_full_url, '/') . '/' . urlencode($video_filename) . '.jpg';
+                    $final_m3u8_url = rtrim($m3u8_full_url, '/') . '/' . urlencode($video_filename) . '.m3u8';
+                } else {
+                    // 回退到原来的链接构建方式
+                    $final_image_url = $image_url;
+                    $final_m3u8_url = $m3u8_url;
+                }
+                
+                // 获取视频播放时长
+                function get_video_duration($input_file) {
+                    // 构建FFprobe命令获取视频时长
+                    $command = "-v quiet -show_entries format=duration -of csv=p=0 \"$input_file\"";
+                    $ffprobe_path = str_replace('ffmpeg.exe', 'ffprobe.exe', FFMPEG_PATH);
+                    if (!file_exists($ffprobe_path)) {
+                        $ffprobe_path = FFMPEG_PATH; // 如果ffprobe不存在，尝试使用ffmpeg
+                    }
+                    
+                    $full_command = "\"$ffprobe_path\" " . $command;
+                    $output = [];
+                    $return_var = 0;
+                    
+                    exec($full_command . ' 2>&1', $output, $return_var);
+                    
+                    if ($return_var === 0 && !empty($output)) {
+                        $duration = floatval($output[0]);
+                        // 格式化时长为 HH:MM:SS 或 MM:SS
+                        if ($duration >= 3600) {
+                            return gmdate('H:i:s', $duration);
+                        } else {
+                            return gmdate('i:s', $duration);
+                        }
+                    }
+                    
+                    return '未知';
+                }
+                
+                // 获取视频播放时长
+                $video_duration = get_video_duration($input_path);
+                
+                // 准备视频信息
+                $videoInfo = [
+                    'vodmc' => $video_filename, // 视频名称
+                    'vodimg' => $final_image_url, // 图片地址
+                    'vodurl' => $final_m3u8_url, // m3u8链接
+                    'vodsj' => $video_duration, // 视频播放时长
+                    'voddx' => $file_size_mb . 'MB' // 文件大小
+                ];
+                
+                // 保存到数据库
+                $result = $db->saveVideoInfo($videoInfo);
+                
+                if ($result['success']) {
+                    error_log('视频信息已成功保存到数据库，ID: ' . $result['id']);
+                } else {
+                    error_log('数据库保存失败: ' . $result['message']);
+                }
+            }
+        }
+    } catch (Exception $e) {
+        // 记录错误但不影响转码流程
+        error_log('数据库操作异常: ' . $e->getMessage());
+    }
+    
     // 记录转码完成
     record_transcode_complete($record_id, $file_size_mb, $transcode_time, $image_url, $m3u8_url);
     
