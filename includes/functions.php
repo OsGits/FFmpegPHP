@@ -9,6 +9,17 @@ function generate_unique_filename($extension) {
     return uniqid() . '.' . $extension;
 }
 
+// 生成10个随机字母或数字的字符串
+function generate_random_string() {
+    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $length = 10;
+    $random_string = '';
+    for ($i = 0; $i < $length; $i++) {
+        $random_string .= $characters[rand(0, strlen($characters) - 1)];
+    }
+    return $random_string;
+}
+
 // 验证文件扩展名
 function validate_extension($filename) {
     global $allowed_extensions;
@@ -154,22 +165,26 @@ function execute_ffmpeg($command, &$output = null, &$error = null) {
 }
 
 // 视频转码切割
-function transcode_video($input_file, $output_dir, $segment_duration = 10, $quality = 'medium', $gpu_method = 'none') {
+function transcode_video($input_file, $output_dir, $segment_duration = 10, $quality = '1080p', $gpu_method = 'none', $random_string = null) {
     global $video_quality, $gpu_acceleration;
     
     // 确保输出目录存在
     ensure_dir($output_dir);
     
-    // 从输入文件名中提取文件名（不含扩展名）
-    $filename = pathinfo($input_file, PATHINFO_FILENAME);
-    // 生成输出文件名 - 使用文件名.m3u8
+    // 生成输出文件名 - 使用随机字符串.m3u8
+    if ($random_string) {
+        $filename = $random_string;
+    } else {
+        // 从输入文件名中提取文件名（不含扩展名）
+        $filename = pathinfo($input_file, PATHINFO_FILENAME);
+    }
     $output_file = $output_dir . '/' . $filename . '.m3u8';
     
     // 获取GPU加速参数
     $gpu_param = $gpu_acceleration[$gpu_method] ?? '';
     
     // 构建FFmpeg命令
-    $quality_param = $video_quality[$quality] ?? $video_quality['original'];
+    $quality_param = $video_quality[$quality] ?? $video_quality['1080p'];
     
     // 生成TS文件名格式 - 序号制度，例如：000001.ts
     $ts_filename_pattern = $output_dir . '/%06d.ts';
@@ -273,13 +288,17 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
 }
 
 // 生成视频截图
-function generate_screenshot($input_file, $output_dir, $time = 10) {
+function generate_screenshot($input_file, $output_dir, $time = 10, $random_string = null) {
     // 确保输出目录存在
     ensure_dir($output_dir);
     
-    // 从输入文件名中提取文件名（不含扩展名）
-    $filename = pathinfo($input_file, PATHINFO_FILENAME);
-    // 生成输出文件名 - 使用文件名.jpg
+    // 生成输出文件名 - 使用随机字符串.jpg
+    if ($random_string) {
+        $filename = $random_string;
+    } else {
+        // 从输入文件名中提取文件名（不含扩展名）
+        $filename = pathinfo($input_file, PATHINFO_FILENAME);
+    }
     $output_file = $output_dir . '/' . $filename . '.jpg';
     
     // 构建FFmpeg命令

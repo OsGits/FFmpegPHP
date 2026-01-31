@@ -20,10 +20,12 @@ $screenshot_time = (int)($_POST['screenshot_time'] ?? 10);
 $quality = $_POST['quality'] ?? 'medium';
 $use_gpu = isset($_POST['use_gpu']) && $_POST['use_gpu'] === '1';
 
-// 构建最终输出目录（在output目录下创建以视频文件名命名的子目录）
-// 移除文件扩展名，只使用文件名部分
-$video_filename = pathinfo($input_file, PATHINFO_FILENAME);
-$final_output_dir = $output_dir . '/' . $video_filename;
+// 保存源文件的文件名（用于数据库和json记录）
+$original_filename = $input_file;
+
+// 构建最终输出目录（在output目录下创建以10位随机数字加字母命名的子目录）
+$random_dir_name = generate_random_string();
+$final_output_dir = $output_dir . '/' . $random_dir_name;
 
 // 加载硬件检测函数
 require_once __DIR__ . '/includes/hardware_detection.php';
@@ -65,19 +67,25 @@ if ($screenshot_time < 0) {
     $errors[] = '截图时间不能为负数';
 }
 
+// 生成当前年月日时分秒作为新文件名
+$timestamp = date('YmdHis');
+$file_extension = pathinfo($input_file, PATHINFO_EXTENSION);
+$new_filename = $timestamp . '.' . $file_extension;
+
 // 构建完整路径，处理编码问题
 if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
     // 在Windows系统上，转换文件名编码为GBK
     $input_file_gbk = iconv('UTF-8', 'GBK//IGNORE', $input_file);
     $original_input_path = UPLOAD_DIR . '/' . $input_file_gbk;
     
-    // 移动文件到ZmFinish目录
+    // 移动文件到ZmFinish目录并使用新文件名
     $zmfinish_dir = ROOT_DIR . '/ZmFinish';
     ensure_dir($zmfinish_dir);
-    $zmfinish_input_path = $zmfinish_dir . '/' . $input_file_gbk;
+    $new_filename_gbk = iconv('UTF-8', 'GBK//IGNORE', $new_filename);
+    $zmfinish_input_path = $zmfinish_dir . '/' . $new_filename_gbk;
     
     if (file_exists($original_input_path)) {
-        // 移动文件到ZmFinish目录
+        // 移动文件到ZmFinish目录并使用新文件名
         rename($original_input_path, $zmfinish_input_path);
         $input_path = $zmfinish_input_path;
     } else {
@@ -88,20 +96,20 @@ if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
     // 先创建output目录（如果不存在）
     ensure_dir(ROOT_DIR . '/' . $output_dir);
     
-    // 然后创建以视频文件名命名的子目录（使用GBK编码）
-    $video_filename_gbk = iconv('UTF-8', 'GBK//IGNORE', $video_filename);
-    $final_output_dir_gbk = ROOT_DIR . '/' . $output_dir . '/' . $video_filename_gbk;
+    // 然后创建以10位随机数字加字母命名的子目录（使用GBK编码）
+    $random_dir_name_gbk = iconv('UTF-8', 'GBK//IGNORE', $random_dir_name);
+    $final_output_dir_gbk = ROOT_DIR . '/' . $output_dir . '/' . $random_dir_name_gbk;
     ensure_dir($final_output_dir_gbk);
 } else {
     $original_input_path = UPLOAD_DIR . '/' . $input_file;
     
-    // 移动文件到ZmFinish目录
+    // 移动文件到ZmFinish目录并使用新文件名
     $zmfinish_dir = ROOT_DIR . '/ZmFinish';
     ensure_dir($zmfinish_dir);
-    $zmfinish_input_path = $zmfinish_dir . '/' . $input_file;
+    $zmfinish_input_path = $zmfinish_dir . '/' . $new_filename;
     
     if (file_exists($original_input_path)) {
-        // 移动文件到ZmFinish目录
+        // 移动文件到ZmFinish目录并使用新文件名
         rename($original_input_path, $zmfinish_input_path);
         $input_path = $zmfinish_input_path;
     } else {
@@ -131,7 +139,7 @@ if (!empty($errors)) {
     exit;
 }
 
-// 记录转码开始
+// 记录转码开始，使用源文件的文件名
 $transcode_options = [
     'base_url' => $base_url,
     'segment_duration' => $segment_duration,
@@ -140,23 +148,23 @@ $transcode_options = [
     'use_gpu' => $use_gpu,
     'output_dir' => $output_dir
 ];
-$record_id = record_transcode_start($input_file, $transcode_options);
+$record_id = record_transcode_start($original_filename, $transcode_options);
 
 // 直接执行转码过程，不使用后台执行，以便查看详细的错误信息
 
 // 记录开始时间
 $start_time = microtime(true);
 
-// 直接执行转码
-$transcode_result = transcode_video($input_path, $final_output_dir_gbk, $segment_duration, $quality, $transcode_method);
+// 直接执行转码，传递随机目录名作为文件名
+$transcode_result = transcode_video($input_path, $final_output_dir_gbk, $segment_duration, $quality, $transcode_method, $random_dir_name);
 
 // 检查转码是否成功
 if (isset($transcode_result['error'])) {
     // 记录转码失败
     record_transcode_failed($record_id, $transcode_result['error']);
 } else {
-    // 生成视频截图
-    generate_screenshot($input_path, $final_output_dir_gbk, 10);
+    // 生成视频截图，传递随机目录名作为文件名
+generate_screenshot($input_path, $final_output_dir_gbk, 10, $random_dir_name);
     
     // 计算文件大小
     $file_size = 0;
@@ -177,9 +185,9 @@ if (isset($transcode_result['error'])) {
     $transcode_time = round($end_time - $start_time, 2);
     
     // 构建图片地址和m3u8地址
-    $encoded_video_filename = urlencode($video_filename);
-    $image_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/' . urlencode($video_filename) . '.jpg';
-    $m3u8_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/' . urlencode($video_filename) . '.m3u8';
+$encoded_dir_name = urlencode($random_dir_name);
+$image_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_dir_name . '/' . $encoded_dir_name . '.jpg';
+$m3u8_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_dir_name . '/' . $encoded_dir_name . '.m3u8';
     
     // 尝试保存到数据库
     try {
@@ -199,13 +207,21 @@ if (isset($transcode_result['error'])) {
                 // 构建完整的链接 - 使用m3u8_full_url
                 $m3u8_full_url = $config['m3u8_full_url'] ?? '';
                 if (!empty($m3u8_full_url)) {
-                    // 使用配置的完整链接作为基础
-                    $final_image_url = rtrim($m3u8_full_url, '/') . '/' . urlencode($video_filename) . '.jpg';
-                    $final_m3u8_url = rtrim($m3u8_full_url, '/') . '/' . urlencode($video_filename) . '.m3u8';
+                    // 使用配置的完整链接作为基础，添加年/月/日路径
+                    $year = date('Y');
+                    $month = date('m');
+                    $day = date('d');
+                    $date_path = $year . '/' . $month . '/' . $day;
+                    $final_image_url = rtrim($m3u8_full_url, '/') . '/' . $date_path . '/' . urlencode($random_dir_name) . '.jpg';
+                    $final_m3u8_url = rtrim($m3u8_full_url, '/') . '/' . $date_path . '/' . urlencode($random_dir_name) . '.m3u8';
                 } else {
-                    // 回退到原来的链接构建方式
-                    $final_image_url = $image_url;
-                    $final_m3u8_url = $m3u8_url;
+                    // 构建包含年/月/日路径的URL
+                    $year = date('Y');
+                    $month = date('m');
+                    $day = date('d');
+                    $date_path = urlencode($year) . '/' . urlencode($month) . '/' . urlencode($day);
+                    $final_image_url = rtrim($base_url, '/') . '/m3u8/' . $date_path . '/' . urlencode($random_dir_name) . '.jpg';
+                    $final_m3u8_url = rtrim($base_url, '/') . '/m3u8/' . $date_path . '/' . urlencode($random_dir_name) . '.m3u8';
                 }
                 
                 // 获取视频播放时长
@@ -239,9 +255,9 @@ if (isset($transcode_result['error'])) {
                 // 获取视频播放时长
                 $video_duration = get_video_duration($input_path);
                 
-                // 准备视频信息
+                // 准备视频信息，使用源文件的文件名
                 $videoInfo = [
-                    'vodmc' => $video_filename, // 视频名称
+                    'vodmc' => pathinfo($original_filename, PATHINFO_FILENAME), // 视频名称（使用源文件的文件名）
                     'vodimg' => $final_image_url, // 图片地址
                     'vodurl' => $final_m3u8_url, // m3u8链接
                     'vodsj' => $video_duration, // 视频播放时长
@@ -263,15 +279,49 @@ if (isset($transcode_result['error'])) {
         error_log('数据库操作异常: ' . $e->getMessage());
     }
     
-    // 记录转码完成
-    record_transcode_complete($record_id, $file_size_mb, $transcode_time, $image_url, $m3u8_url);
+    // 创建年/月/日目录结构
+    $year = date('Y');
+    $month = date('m');
+    $day = date('d');
+    $date_dir = $year . '/' . $month . '/' . $day;
     
-    // 修改m3u8文件，更新TS文件路径
-    $m3u8_file = $transcode_result['output_file'];
+    // 目标目录路径
+    $target_base_dir = ROOT_DIR . '/m3u8';
+    $target_dir = $target_base_dir . '/' . $date_dir;
+    
+    // 确保目录存在
+    ensure_dir($target_dir);
+    
+    // 只复制m3u8文件和截图到目标目录
+    $m3u8_file = $final_output_dir_gbk . '/' . $random_dir_name . '.m3u8';
+    $screenshot_file = $final_output_dir_gbk . '/' . $random_dir_name . '.jpg';
+    
+    if (file_exists($m3u8_file)) {
+        copy($m3u8_file, $target_dir . '/' . basename($m3u8_file));
+    }
+    
+    if (file_exists($screenshot_file)) {
+        copy($screenshot_file, $target_dir . '/' . basename($screenshot_file));
+    }
+    
+    // 构建新的图片地址和m3u8地址（包含年/月/日路径）
+    $encoded_year = urlencode($year);
+    $encoded_month = urlencode($month);
+    $encoded_day = urlencode($day);
+    $date_path = $encoded_year . '/' . $encoded_month . '/' . $encoded_day;
+    
+    $new_image_url = rtrim($base_url, '/') . '/m3u8/' . $date_path . '/' . $encoded_dir_name . '.jpg';
+    $new_m3u8_url = rtrim($base_url, '/') . '/m3u8/' . $date_path . '/' . $encoded_dir_name . '.m3u8';
+    
+    // 记录转码完成（使用新的URL）
+    record_transcode_complete($record_id, $file_size_mb, $transcode_time, $new_image_url, $new_m3u8_url);
+    
+    // 修改m3u8文件，更新TS文件路径（不包含日期路径）
+    $m3u8_file = $target_dir . '/' . $random_dir_name . '.m3u8';
     if (file_exists($m3u8_file)) {
         $m3u8_content = file_get_contents($m3u8_file);
-        // 替换TS文件路径
-        $new_m3u8_content = preg_replace('/(\d{6}\.ts)/', rtrim($base_url, '/') . '/m3u8/' . $encoded_video_filename . '/$1', $m3u8_content);
+        // 替换TS文件路径，只使用基础的TS文件路径设置
+        $new_m3u8_content = preg_replace('/(\d{6}\.ts)/', rtrim($base_url, '/') . '/m3u8/' . $random_dir_name . '/$1', $m3u8_content);
         // 保存修改后的内容
         file_put_contents($m3u8_file, $new_m3u8_content);
     }
@@ -307,10 +357,10 @@ exit;
         // 更新进度
         update_transcode_progress($record_id, 10);
         
-        // 执行转码，传递用户选择的转码方式
+        // 执行转码，传递用户选择的转码方式和随机目录名作为文件名
         // 当用户勾选了GPU加速时，强制使用GPU，不回退到CPU
         // 使用处理编码问题后的输出目录路径
-        $transcode_result = transcode_video($input_path, $final_output_dir_gbk, $segment_duration, $quality, $transcode_method);
+        $transcode_result = transcode_video($input_path, $final_output_dir_gbk, $segment_duration, $quality, $transcode_method, $random_dir_name);
         
         // 更新进度
         update_transcode_progress($record_id, 50);
@@ -345,9 +395,9 @@ exit;
             ob_flush();
             flush();
             
-            // 2. 生成视频截图
+            // 2. 生成视频截图，传递随机目录名作为文件名
             echo '<h3>2. 视频截图</h3>';
-            $screenshot_result = generate_screenshot($input_path, $final_output_dir_gbk, $screenshot_time);
+            $screenshot_result = generate_screenshot($input_path, $final_output_dir_gbk, $screenshot_time, $random_dir_name);
             
             if (isset($screenshot_result['error'])) {
                 echo get_error_message($screenshot_result['error']);
@@ -406,9 +456,9 @@ exit;
             if (file_exists($m3u8_file)) {
                 $m3u8_content = file_get_contents($m3u8_file);
                 // 替换TS文件路径 - 处理序号制度的TS文件名，例如：000001.ts
-                // 使用URL编码处理视频文件名，确保路径中包含中文时也能正确访问
-                $encoded_video_filename = urlencode($video_filename);
-                $new_m3u8_content = preg_replace('/(\d{6}\.ts)/', rtrim($base_url, '/') . '/' . $encoded_video_filename . '/$1', $m3u8_content);
+                // 使用URL编码处理随机目录名，确保路径中包含特殊字符时也能正确访问
+                $encoded_dir_name = urlencode($random_dir_name);
+                $new_m3u8_content = preg_replace('/(\d{6}\.ts)/', rtrim($base_url, '/') . '/m3u8/' . $encoded_dir_name . '/$1', $m3u8_content);
                 // 保存修改后的内容
                 if (file_put_contents($m3u8_file, $new_m3u8_content)) {
                     echo '<p style="color: green;">M3U8文件更新成功</p>';
@@ -430,7 +480,7 @@ exit;
             
             // 8. 显示最终设置
             echo '<h3>7. 最终设置</h3>';
-            echo '<p>视频文件名: ' . htmlspecialchars($video_filename) . '</p>';
+            echo '<p>视频文件名: ' . htmlspecialchars(pathinfo($original_filename, PATHINFO_FILENAME)) . '</p>';
             echo '<p>基础地址: ' . htmlspecialchars($base_url) . '</p>';
             // 显示UTF-8编码的目录路径，确保中文显示正确
             echo '<p>TS文件存储目录: ' . htmlspecialchars($final_output_dir) . '</p>';
@@ -447,9 +497,9 @@ exit;
             $file_size_mb = round($file_size / 1024 / 1024, 2);
             
             // 构建图片地址和m3u8地址
-            $encoded_video_filename = urlencode($video_filename);
-            $image_url = rtrim($base_url, '/') . '/' . $encoded_video_filename . '/index.jpg';
-            $m3u8_url = rtrim($base_url, '/') . '/' . $encoded_video_filename . '/index.m3u8';
+            $encoded_dir_name = urlencode($random_dir_name);
+            $image_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_dir_name . '/' . $encoded_dir_name . '.jpg';
+            $m3u8_url = rtrim($base_url, '/') . '/m3u8/' . $encoded_dir_name . '/' . $encoded_dir_name . '.m3u8';
             
             // 更新进度
             update_transcode_progress($record_id, 100);

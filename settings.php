@@ -34,57 +34,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 读取当前配置
     $config = read_config();
     
-    // 只更新实际被提交的字段
-    // 基础设置
-    if (isset($_POST['ffmpeg_path'])) {
-        $config['ffmpeg_path'] = $_POST['ffmpeg_path'] ?? 'ffmpeg';
-    }
-    if (isset($_POST['gpu_acceleration'])) {
-        $config['gpu_acceleration'] = $_POST['gpu_acceleration'] ?? 'none';
-    }
-    if (isset($_POST['input_dir'])) {
-        $config['input_dir'] = $_POST['input_dir'] ?? './vodoss/';
-    }
-    if (isset($_POST['output_dir'])) {
-        $config['output_dir'] = $_POST['output_dir'] ?? './m3u8/';
-    }
-    if (isset($_POST['base_url'])) {
-        $config['base_url'] = $_POST['base_url'] ?? '';
-    }
-    if (isset($_POST['segment_duration'])) {
-        $config['segment_duration'] = $_POST['segment_duration'] ?? 10;
-    }
-    if (isset($_POST['screenshot_time'])) {
-        $config['screenshot_time'] = $_POST['screenshot_time'] ?? 10;
-    }
-    if (isset($_POST['quality'])) {
-        $config['quality'] = $_POST['quality'] ?? '1080p';
-    }
-    if (isset($_POST['use_gpu'])) {
-        $config['use_gpu'] = $_POST['use_gpu'] ?? 0;
+    // 检查是否是基础设置表单提交
+    if (isset($_POST['ffmpeg_path']) || isset($_POST['input_dir']) || isset($_POST['output_dir']) || isset($_POST['base_url']) || isset($_POST['segment_duration']) || isset($_POST['screenshot_time']) || isset($_POST['quality']) || isset($_POST['use_gpu'])) {
+        // 基础设置
+        if (isset($_POST['ffmpeg_path'])) {
+            $config['ffmpeg_path'] = $_POST['ffmpeg_path'] ?? 'ffmpeg';
+        }
+        if (isset($_POST['gpu_acceleration'])) {
+            $config['gpu_acceleration'] = $_POST['gpu_acceleration'] ?? 'none';
+        }
+        if (isset($_POST['input_dir'])) {
+            $config['input_dir'] = $_POST['input_dir'] ?? './vodoss/';
+        }
+        if (isset($_POST['output_dir'])) {
+            $config['output_dir'] = $_POST['output_dir'] ?? './m3u8/';
+        }
+        if (isset($_POST['base_url'])) {
+            $config['base_url'] = $_POST['base_url'] ?? '';
+        }
+        if (isset($_POST['segment_duration'])) {
+            $config['segment_duration'] = $_POST['segment_duration'] ?? 10;
+        }
+        if (isset($_POST['screenshot_time'])) {
+            $config['screenshot_time'] = $_POST['screenshot_time'] ?? 10;
+        }
+        if (isset($_POST['quality'])) {
+            $config['quality'] = $_POST['quality'] ?? '1080p';
+        }
+        // 无论是否勾选，都更新use_gpu配置（只有在基础设置表单提交时）
+        $config['use_gpu'] = isset($_POST['use_gpu']) ? 1 : 0;
     }
     
-    // MySQL设置
-    if (isset($_POST['mysql_enabled'])) {
-        $config['mysql_enabled'] = $_POST['mysql_enabled'] ?? 0;
-    }
-    if (isset($_POST['mysql_host'])) {
-        $config['mysql_host'] = $_POST['mysql_host'] ?? 'localhost';
-    }
-    if (isset($_POST['mysql_port'])) {
-        $config['mysql_port'] = $_POST['mysql_port'] ?? '3306';
-    }
-    if (isset($_POST['mysql_db'])) {
-        $config['mysql_db'] = $_POST['mysql_db'] ?? 'vod_system';
-    }
-    if (isset($_POST['mysql_user'])) {
-        $config['mysql_user'] = $_POST['mysql_user'] ?? 'root';
-    }
-    if (isset($_POST['mysql_password'])) {
-        $config['mysql_password'] = $_POST['mysql_password'] ?? '';
-    }
-    if (isset($_POST['m3u8_full_url'])) {
-        $config['m3u8_full_url'] = $_POST['m3u8_full_url'] ?? '';
+    // 检查是否是数据库设置表单提交
+    if (isset($_POST['mysql_host']) || isset($_POST['mysql_port']) || isset($_POST['mysql_db']) || isset($_POST['mysql_user']) || isset($_POST['mysql_password']) || isset($_POST['m3u8_full_url']) || isset($_POST['mysql_enabled'])) {
+        // MySQL设置
+        // 无论是否勾选，都更新mysql_enabled配置（只有在数据库设置表单提交时）
+        $config['mysql_enabled'] = isset($_POST['mysql_enabled']) ? 1 : 0;
+        if (isset($_POST['mysql_host'])) {
+            $config['mysql_host'] = $_POST['mysql_host'] ?? 'localhost';
+        }
+        if (isset($_POST['mysql_port'])) {
+            $config['mysql_port'] = $_POST['mysql_port'] ?? '3306';
+        }
+        if (isset($_POST['mysql_db'])) {
+            $config['mysql_db'] = $_POST['mysql_db'] ?? 'vod_system';
+        }
+        if (isset($_POST['mysql_user'])) {
+            $config['mysql_user'] = $_POST['mysql_user'] ?? 'root';
+        }
+        if (isset($_POST['mysql_password'])) {
+            $config['mysql_password'] = $_POST['mysql_password'] ?? '';
+        }
+        if (isset($_POST['m3u8_full_url'])) {
+            $config['m3u8_full_url'] = $_POST['m3u8_full_url'] ?? '';
+        }
     }
     
     // 保存配置
