@@ -73,51 +73,67 @@ $paged_files = array_slice($server_files, $start_index, $page_size);
     <!-- 服务器文件列表 -->
     <?php if (!empty($server_files)): ?>
         <div class="card">
-            <h2>服务器文件列表</h2>
-            <ul class="file-list">
-                <?php foreach ($paged_files as $file_info): ?>
-                    <?php $file = $file_info['name']; ?>
-                    <li style="padding: 10px; border-bottom: 1px solid #eee;">
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                            <form action="process.php" method="post" style="display: inline;">
-                                <!-- 隐藏字段，传递设置参数 -->
-                                <input type="hidden" name="input_file" value="<?php echo htmlspecialchars($file); ?>">
-                                <input type="hidden" name="base_url" value="<?php echo htmlspecialchars($base_url); ?>">
-                                <input type="hidden" name="segment_duration" value="<?php echo $default_segment_duration; ?>">
-                                <input type="hidden" name="screenshot_time" value="<?php echo $default_screenshot_time; ?>">
-                                <input type="hidden" name="quality" value="<?php echo $default_quality; ?>">
-                                <input type="hidden" name="use_gpu" value="<?php echo $default_use_gpu; ?>">
-                                <input type="hidden" name="output_dir" value="m3u8">
-                                <?php if ($is_transcoding): ?>
-                                    <button type="button" class="transcode-btn" disabled style="background-color: #9e9e9e; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: not-allowed; display: inline-block; white-space: nowrap;">稍后再来</button>
-                                <?php else: ?>
-                                    <button type="submit" class="transcode-btn" style="background-color: #4CAF50; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; display: inline-block; white-space: nowrap;">开始转码</button>
-                                <?php endif; ?>
-                            </form>
-                            <span style="font-weight: bold; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><?php echo htmlspecialchars($file); ?></span>
-                        </div>
-                        <div style="font-size: 14px; color: #666; display: flex; gap: 20px;">
-                            <?php 
-                                // 处理Windows系统的文件名编码问题
-                                if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-                                    $file_gbk = iconv('UTF-8', 'GBK//IGNORE', $file);
-                                    $file_path = UPLOAD_DIR . '/' . $file_gbk;
-                                } else {
-                                    $file_path = UPLOAD_DIR . '/' . $file;
-                                }
-                                $file_size = 0;
-                                $file_time = '';
-                                if (file_exists($file_path)) {
-                                    $file_size = round(filesize($file_path) / 1024 / 1024, 2);
-                                    $file_time = date('Y-m-d H:i:s', $file_info['time']);
-                                }
-                            ?>
-                            <span>大小: <?php echo $file_size; ?> MB</span>
-                            <span>修改时间: <?php echo $file_time; ?></span>
-                        </div>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
+            <form action="z.php" method="post">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>服务器文件列表</h2>
+                    <input type="hidden" name="batch_transcode" value="1">
+                    <input type="hidden" name="base_url" value="<?php echo htmlspecialchars($base_url); ?>">
+                    <input type="hidden" name="segment_duration" value="<?php echo $default_segment_duration; ?>">
+                    <input type="hidden" name="screenshot_time" value="<?php echo $default_screenshot_time; ?>">
+                    <input type="hidden" name="quality" value="<?php echo $default_quality; ?>">
+                    <input type="hidden" name="use_gpu" value="<?php echo $default_use_gpu; ?>">
+                    <input type="hidden" name="output_dir" value="m3u8">
+                    <?php if ($is_transcoding): ?>
+                        <button type="button" class="batch-transcode-btn" disabled style="background-color: #9e9e9e; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: not-allowed;">批量转码</button>
+                    <?php else: ?>
+                        <button type="submit" class="batch-transcode-btn" style="background-color: #2196F3; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">批量转码</button>
+                    <?php endif; ?>
+                </div>
+                <ul class="file-list">
+                    <?php foreach ($paged_files as $file_info): ?>
+                        <?php $file = $file_info['name']; ?>
+                        <li style="padding: 10px; border-bottom: 1px solid #eee;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                                <div style="display: inline;">
+                                    <!-- 单个文件转码按钮 -->
+                                    <input type="hidden" name="input_file" value="<?php echo htmlspecialchars($file); ?>">
+                                    <input type="hidden" name="base_url" value="<?php echo htmlspecialchars($base_url); ?>">
+                                    <input type="hidden" name="segment_duration" value="<?php echo $default_segment_duration; ?>">
+                                    <input type="hidden" name="screenshot_time" value="<?php echo $default_screenshot_time; ?>">
+                                    <input type="hidden" name="quality" value="<?php echo $default_quality; ?>">
+                                    <input type="hidden" name="use_gpu" value="<?php echo $default_use_gpu; ?>">
+                                    <input type="hidden" name="output_dir" value="m3u8">
+                                    <?php if ($is_transcoding): ?>
+                                        <button type="button" class="transcode-btn" disabled style="background-color: #9e9e9e; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: not-allowed; display: inline-block; white-space: nowrap;">稍后再来</button>
+                                    <?php else: ?>
+                                        <button type="button" class="single-transcode-btn" data-file="<?php echo htmlspecialchars($file); ?>" style="background-color: #4CAF50; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; display: inline-block; white-space: nowrap;">开始转码</button>
+                                    <?php endif; ?>
+                                </div>
+                                <span style="font-weight: bold; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><?php echo htmlspecialchars($file); ?></span>
+                            </div>
+                            <div style="font-size: 14px; color: #666; display: flex; gap: 20px;">
+                                <?php 
+                                    // 处理Windows系统的文件名编码问题
+                                    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                                        $file_gbk = iconv('UTF-8', 'GBK//IGNORE', $file);
+                                        $file_path = UPLOAD_DIR . '/' . $file_gbk;
+                                    } else {
+                                        $file_path = UPLOAD_DIR . '/' . $file;
+                                    }
+                                    $file_size = 0;
+                                    $file_time = '';
+                                    if (file_exists($file_path)) {
+                                        $file_size = round(filesize($file_path) / 1024 / 1024, 2);
+                                        $file_time = date('Y-m-d H:i:s', $file_info['time']);
+                                    }
+                                ?>
+                                <span>大小: <?php echo $file_size; ?> MB</span>
+                                <span>修改时间: <?php echo $file_time; ?></span>
+                            </div>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </form>
             
             <!-- 分页导航 -->
             <?php if ($total_pages > 1): ?>
@@ -143,11 +159,52 @@ $paged_files = array_slice($server_files, $start_index, $page_size);
     <?php endif; ?>
 
 <script>
-// 转码表单提交后跳转到记录页面
-document.querySelectorAll('form[action="process.php"]').forEach(function(form) {
-    form.addEventListener('submit', function() {
-        // 显示转码开始提示
+// 批量转码表单提交处理
+const batchForm = document.querySelector('form[action="z.php"]');
+if (batchForm) {
+    batchForm.addEventListener('submit', function(event) {
+        // 显示批量转码开始提示
+        alert('批量转码开始，系统将自动处理待转码目录中的视频文件，请在z.php页面查看转码进度');
+    });
+}
+
+// 单个文件转码按钮点击处理
+document.querySelectorAll('.single-transcode-btn').forEach(function(button) {
+    button.addEventListener('click', function() {
+        const file = this.getAttribute('data-file');
+        // 创建临时表单提交单个文件转码
+        const form = document.createElement('form');
+        form.action = 'process.php';
+        form.method = 'post';
+        form.style.display = 'none';
+        
+        // 添加表单字段
+        const fields = {
+            'input_file': file,
+            'base_url': '<?php echo htmlspecialchars($base_url); ?>',
+            'segment_duration': '<?php echo $default_segment_duration; ?>',
+            'screenshot_time': '<?php echo $default_screenshot_time; ?>',
+            'quality': '<?php echo $default_quality; ?>',
+            'use_gpu': '<?php echo $default_use_gpu; ?>',
+            'output_dir': 'm3u8'
+        };
+        
+        for (const [name, value] of Object.entries(fields)) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+        }
+        
+        document.body.appendChild(form);
+        
+        // 显示单个文件转码开始提示
         alert('转码开始，请在记录页面查看转码进度');
+        
+        // 提交表单
+        form.submit();
+        
         // 跳转到记录页面
         setTimeout(function() {
             window.location.href = 'history.php';
