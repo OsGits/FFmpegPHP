@@ -60,8 +60,47 @@ $paged_files = array_slice($server_files, $start_index, $page_size);
                 <div><strong>使用GPU加速:</strong> <?php echo ($default_use_gpu == 1 && $gpu_info['available']) ? '是' : '否'; ?></div>
                 <div><strong>转码后保存目录:</strong> <?php echo OUTPUT_DIR; ?></div>
             </div>
-            <small>如需修改转码设置，请前往 <a href="settings.php">设置</a> 页面</small>
+            <small>如需修改默认转码设置，请前往 <a href="settings.php">设置</a> 页面</small>
         </div>
+        
+        <!-- 转码参数设置 -->
+        <div class="form-group">
+            <label>转码参数设置</label>
+            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; border: 1px solid #ddd;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <label for="segment_duration" style="display: block; margin-bottom: 5px;">切片时长 (秒)</label>
+                        <input type="number" id="segment_duration" name="segment_duration" value="<?php echo $default_segment_duration; ?>" min="1" max="60" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <small>每个TS切片的时长，默认为10秒</small>
+                    </div>
+                    <div>
+                        <label for="screenshot_time" style="display: block; margin-bottom: 5px;">截图时间点 (秒)</label>
+                        <input type="number" id="screenshot_time" name="screenshot_time" value="<?php echo $default_screenshot_time; ?>" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <small>视频截图的时间点，默认为10秒</small>
+                    </div>
+                    <div>
+                        <label for="quality" style="display: block; margin-bottom: 5px;">画质选择</label>
+                        <select id="quality" name="quality" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <option value="original" <?php echo $default_quality === 'original' ? 'selected' : ''; ?>>原画质</option>
+                            <option value="1080p" <?php echo $default_quality === '1080p' ? 'selected' : ''; ?>>1080P</option>
+                            <option value="720p" <?php echo $default_quality === '720p' ? 'selected' : ''; ?>>720P</option>
+                        </select>
+                        <small>选择转码后的视频画质</small>
+                    </div>
+                    <div>
+                        <label for="use_gpu" style="display: block; margin-bottom: 5px;">使用GPU加速</label>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="use_gpu" name="use_gpu" value="1" <?php echo $default_use_gpu == 1 ? 'checked' : ''; ?> <?php echo !$gpu_info['available'] ? 'disabled' : ''; ?>>
+                            <label for="use_gpu" style="color: <?php echo $gpu_info['available'] ? 'green' : 'red'; ?>">
+                                <?php echo $gpu_info['available'] ? '使用GPU加速' : '未检测到GPU，无法使用GPU加速'; ?>
+                            </label>
+                        </div>
+                        <small><?php echo $gpu_info['available'] ? '勾选后使用GPU加速转码' : '未检测到GPU，只能使用CPU'; ?></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- 转码状态提示 -->
         <?php if ($is_transcoding): ?>
             <div style="background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-top: 10px; border: 1px solid #ffeaa7;">
@@ -182,10 +221,10 @@ document.querySelectorAll('.single-transcode-btn').forEach(function(button) {
         const fields = {
             'input_file': file,
             'base_url': '<?php echo htmlspecialchars($base_url); ?>',
-            'segment_duration': '<?php echo $default_segment_duration; ?>',
-            'screenshot_time': '<?php echo $default_screenshot_time; ?>',
-            'quality': '<?php echo $default_quality; ?>',
-            'use_gpu': '<?php echo $default_use_gpu; ?>',
+            'segment_duration': document.getElementById('segment_duration') ? document.getElementById('segment_duration').value : '<?php echo $default_segment_duration; ?>',
+            'screenshot_time': document.getElementById('screenshot_time') ? document.getElementById('screenshot_time').value : '<?php echo $default_screenshot_time; ?>',
+            'quality': document.getElementById('quality') ? document.getElementById('quality').value : '<?php echo $default_quality; ?>',
+            'use_gpu': document.getElementById('use_gpu') ? (document.getElementById('use_gpu').checked ? '1' : '0') : '<?php echo $default_use_gpu; ?>',
             'output_dir': 'm3u8'
         };
         

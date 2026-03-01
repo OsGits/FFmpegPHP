@@ -56,10 +56,11 @@ if (empty($current_task)) {
         // 验证参数
         $errors = [];
         
-        $base_url = 'https://pan.cnp.cc/d/WebDAC/Pan/115/Oss/';
-        $segment_duration = 3;
-        $screenshot_time = 15;
-        $quality = 'original';
+        // 从配置文件中读取参数
+        $base_url = $config['base_url'] ?? '';
+        $segment_duration = $config['segment_duration'] ?? 10;
+        $screenshot_time = $config['screenshot_time'] ?? 10;
+        $quality = $config['quality'] ?? '1080p';
         $output_dir = 'm3u8';
         
         if (empty($base_url)) {

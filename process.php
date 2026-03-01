@@ -188,7 +188,7 @@ if ($is_batch_transcode) {
             record_transcode_failed($record_id, $transcode_result['error']);
         } else {
             // 生成视频截图，传递随机目录名作为文件名
-            generate_screenshot($input_path, $final_output_dir_gbk, 10, $random_dir_name);
+            generate_screenshot($input_path, $final_output_dir_gbk, $screenshot_time, $random_dir_name);
             
             // 计算文件大小
             $file_size = 0;
