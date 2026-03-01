@@ -180,8 +180,9 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
     }
     $output_file = $output_dir . '/' . $filename . '.m3u8';
     
-    // 获取GPU加速参数
-    $gpu_param = $gpu_acceleration[$gpu_method] ?? '';
+    // 获取视频信息，用于调试
+    $video_info = get_video_info($input_file);
+    error_log('Input video info: ' . json_encode($video_info));
     
     // 构建FFmpeg命令
     $quality_param = $video_quality[$quality] ?? $video_quality['1080p'];
@@ -189,69 +190,44 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
     // 生成TS文件名格式 - 序号制度，例如：000001.ts
     $ts_filename_pattern = $output_dir . '/%06d.ts';
     
+    // 构建基础命令，让FFmpeg自动处理输入编码
+    // 只指定输出编码器，不指定输入编码器
+    $base_command = "-i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+    
+    // 根据GPU加速方法和画质调整命令
+    if (!empty($quality_param)) {
+        $base_command = "-i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+    }
+    
     // 根据GPU加速方法调整命令
-    if ($gpu_method === 'none') {
-        // 无GPU加速，使用默认的CPU编码
+    $command = $base_command;
+    if ($gpu_method === 'cuda') {
+        // NVIDIA CUDA加速
         if (empty($quality_param)) {
-            // 原画质，不改变分辨率
-            $command = "-i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            $command = "-hwaccel cuda -i \"$input_file\" -c:v h264_nvenc -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         } else {
-            // 指定了画质，添加相应参数
-            $command = "-i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            $command = "-hwaccel cuda -i \"$input_file\" -c:v h264_nvenc $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         }
-    } else {
-        // 使用GPU加速，根据不同的GPU类型构建不同的命令
-        switch ($gpu_method) {
-            case 'cuda':
-                // NVIDIA CUDA加速
-                if (empty($quality_param)) {
-                    // 原画质，不改变分辨率
-                    $command = "-hwaccel cuda -i \"$input_file\" -c:v h264_nvenc -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-                } else {
-                    // 指定了画质，添加相应参数
-                    $command = "-hwaccel cuda -i \"$input_file\" -c:v h264_nvenc $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-                }
-                break;
-            case 'amf':
-                // AMD AMF加速
-                if (empty($quality_param)) {
-                    // 原画质，不改变分辨率
-                    $command = "-hwaccel amf -i \"$input_file\" -c:v h264_amf -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-                } else {
-                    // 指定了画质，添加相应参数
-                    $command = "-hwaccel amf -i \"$input_file\" -c:v h264_amf $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-                }
-                break;
-            case 'dxva2':
-                // DXVA2加速
-                if (empty($quality_param)) {
-                    // 原画质，不改变分辨率
-                    $command = "-hwaccel dxva2 -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-                } else {
-                    // 指定了画质，添加相应参数
-                    $command = "-hwaccel dxva2 -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-                }
-                break;
-            case 'd3d11va':
-                // D3D11VA加速
-                if (empty($quality_param)) {
-                    // 原画质，不改变分辨率
-                    $command = "-hwaccel d3d11va -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-                } else {
-                    // 指定了画质，添加相应参数
-                    $command = "-hwaccel d3d11va -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-                }
-                break;
-            default:
-                // 默认使用CPU编码
-                if (empty($quality_param)) {
-                    // 原画质，不改变分辨率
-                    $command = "-i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-                } else {
-                    // 指定了画质，添加相应参数
-                    $command = "-i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-                }
-                break;
+    } elseif ($gpu_method === 'amf') {
+        // AMD AMF加速
+        if (empty($quality_param)) {
+            $command = "-hwaccel amf -i \"$input_file\" -c:v h264_amf -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        } else {
+            $command = "-hwaccel amf -i \"$input_file\" -c:v h264_amf $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        }
+    } elseif ($gpu_method === 'dxva2') {
+        // DXVA2加速
+        if (empty($quality_param)) {
+            $command = "-hwaccel dxva2 -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        } else {
+            $command = "-hwaccel dxva2 -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        }
+    } elseif ($gpu_method === 'd3d11va') {
+        // D3D11VA加速
+        if (empty($quality_param)) {
+            $command = "-hwaccel d3d11va -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        } else {
+            $command = "-hwaccel d3d11va -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         }
     }
     
@@ -264,7 +240,25 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
     $success = execute_ffmpeg($command, $output, $error);
     
     if (!$success) {
-        return ['error' => '转码失败: ' . $error];
+        // 转码失败，尝试使用更通用的CPU编码命令
+        error_log('转码失败，尝试使用通用CPU编码命令');
+        
+        // 构建通用的CPU编码命令
+        $fallback_command = $base_command;
+        error_log('尝试使用的备用命令: ' . $fallback_command);
+        
+        $output = [];
+        $error = '';
+        $success = execute_ffmpeg($fallback_command, $output, $error);
+        
+        if (!$success) {
+            // 再次失败，返回详细错误信息
+            error_log('转码完全失败: ' . $error);
+            return ['error' => '转码失败: ' . $error];
+        }
+        
+        // 备用命令成功，使用备用命令的结果
+        $command = $fallback_command;
     }
     
     // 获取生成的文件列表
