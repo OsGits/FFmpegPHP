@@ -299,6 +299,13 @@ $ffprobe_status = test_ffprobe_path($current_ffprobe_path) ? '可用' : '不可�
                     <option value="720p" <?php echo $current_quality === '720p' ? 'selected' : ''; ?>>720P</option>
                 </select>
                 <small>选择转码后的视频画质</small>
+                <div style="margin-top: 8px; padding: 10px; background-color: #e8f4f8; border-radius: 4px;">
+                    <strong>💡 提示：</strong>
+                    <ul style="margin: 5px 0 0 20px; padding: 0;">
+                        <li><strong>原画质</strong>：直接复制视频流不重新编码，处理速度极快，画质无损失</li>
+                        <li><strong>1080P/720P</strong>：重新编码到指定画质，兼容性更好，但处理速度较慢</li>
+                    </ul>
+                </div>
             </div>
             
             <div class="form-group">

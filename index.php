@@ -63,7 +63,7 @@ $gpu_info = $system_info['gpu'];
     <div class="card">
         <h2>版本信息</h2>
         <div>
-            <strong>版本号:</strong> V1.1.0 (跨平台优化版)
+            <strong>版本号:</strong> V1.1.2
         </div>
     </div>
 

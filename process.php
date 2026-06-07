@@ -278,17 +278,21 @@ function process_single_file($file, $output_dir, $base_url, $segment_duration, $
     // 确保目录存在
     ensure_dir($target_dir);
     
-    // 只复制m3u8文件和截图到目标目录
-    $m3u8_file = safe_path($final_output_dir_gbk . DS . $random_dir_name . '.m3u8');
-    $screenshot_file = safe_path($final_output_dir_gbk . DS . $random_dir_name . '.jpg');
+    // 复制所有文件（m3u8、截图、TS文件）到目标目录
+    // 首先创建以random_dir_name命名的子目录
+    $target_sub_dir = safe_path($target_dir . DS . $random_dir_name);
+    ensure_dir($target_sub_dir);
     
-    if (file_exists($m3u8_file)) {
-        copy($m3u8_file, safe_path($target_dir . DS . basename($m3u8_file)));
+    // 复制所有文件
+    $dir = opendir($final_output_dir_gbk);
+    while (($file_item = readdir($dir)) !== false) {
+        if ($file_item != '.' && $file_item != '..') {
+            $source_file = safe_path($final_output_dir_gbk . DS . $file_item);
+            $dest_file = safe_path($target_sub_dir . DS . $file_item);
+            copy($source_file, $dest_file);
+        }
     }
-    
-    if (file_exists($screenshot_file)) {
-        copy($screenshot_file, safe_path($target_dir . DS . basename($screenshot_file)));
-    }
+    closedir($dir);
     
     // 构建新的图片地址和m3u8地址（包含年/月/日路径）
     $encoded_dir_name = urlencode($random_dir_name);
@@ -310,11 +314,12 @@ function process_single_file($file, $output_dir, $base_url, $segment_duration, $
     record_transcode_complete($record_id, $file_size_mb, $transcode_time, $final_image_url, $final_m3u8_url);
     
     // 修改m3u8文件，更新TS文件路径
-    $m3u8_file = safe_path($target_dir . DS . $random_dir_name . '.m3u8');
+    $m3u8_file = safe_path($target_sub_dir . DS . $random_dir_name . '.m3u8');
     if (file_exists($m3u8_file)) {
         $m3u8_content = file_get_contents($m3u8_file);
-        // 替换TS文件路径
-        $new_m3u8_content = preg_replace('/(\d{6}\.ts)/', rtrim($base_url, '/') . '/m3u8/' . $random_dir_name . '/$1', $m3u8_content);
+        // 替换TS文件路径，使用正确的年/月/日目录结构
+        $ts_path_prefix = rtrim($base_url, '/') . '/m3u8/' . $date_path_url . '/' . $random_dir_name . '/';
+        $new_m3u8_content = preg_replace('/(\d{6}\.ts)/', $ts_path_prefix . '$1', $m3u8_content);
         // 保存修改后的内容
         file_put_contents($m3u8_file, $new_m3u8_content);
     }

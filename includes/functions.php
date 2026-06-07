@@ -236,69 +236,76 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
     $video_info = get_video_info($input_file);
     error_log('Input video info: ' . json_encode($video_info));
     
-    // 构建FFmpeg命令
-    $quality_param = $video_quality[$quality] ?? $video_quality['1080p'];
-    
     // 生成TS文件名格式 - 序号制度，例如：000001.ts
     $ts_filename_pattern = safe_path($output_dir . DS . '%06d.ts');
     
-    // 构建基础命令，让FFmpeg自动处理输入编码
-    // 只指定输出编码器，不指定输入编码器
-    $base_command = "-i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-    
-    // 根据GPU加速方法和画质调整命令
-    if (!empty($quality_param)) {
-        $base_command = "-i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-    }
-    
-    // 根据GPU加速方法调整命令
-    $command = $base_command;
-    
-    // 检查GPU方法是否适用于当前平台
-    $is_gpu_available = true;
-    if ($gpu_method !== 'none') {
-        // 在非Windows平台上检查GPU方法兼容性
-        if (!IS_WINDOWS && in_array($gpu_method, ['dxva2', 'd3d11va', 'amf'])) {
-            error_log("GPU方法 $gpu_method 不适用于当前平台，使用CPU编码");
-            $is_gpu_available = false;
-            $gpu_method = 'none';
+    // 如果选择源画质，直接使用 -c copy 复制流，不转码
+    if ($quality === 'original') {
+        error_log('使用源画质模式，直接复制流不转码');
+        $command = "-i \"$input_file\" -c copy -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        $gpu_method = 'none'; // 复制流不需要GPU加速
+    } else {
+        // 构建FFmpeg转码命令
+        $quality_param = $video_quality[$quality] ?? $video_quality['1080p'];
+        
+        // 构建基础命令，让FFmpeg自动处理输入编码
+        // 只指定输出编码器，不指定输入编码器
+        $base_command = "-i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        
+        // 根据GPU加速方法和画质调整命令
+        if (!empty($quality_param)) {
+            $base_command = "-i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         }
-    }
-    
-    if ($is_gpu_available && $gpu_method === 'cuda') {
-        // NVIDIA CUDA加速 (Windows/Linux)
-        if (empty($quality_param)) {
-            $command = "-hwaccel cuda -i \"$input_file\" -c:v h264_nvenc -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-        } else {
-            $command = "-hwaccel cuda -i \"$input_file\" -c:v h264_nvenc $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        
+        // 根据GPU加速方法调整命令
+        $command = $base_command;
+        
+        // 检查GPU方法是否适用于当前平台
+        $is_gpu_available = true;
+        if ($gpu_method !== 'none') {
+            // 在非Windows平台上检查GPU方法兼容性
+            if (!IS_WINDOWS && in_array($gpu_method, ['dxva2', 'd3d11va', 'amf'])) {
+                error_log("GPU方法 $gpu_method 不适用于当前平台，使用CPU编码");
+                $is_gpu_available = false;
+                $gpu_method = 'none';
+            }
         }
-    } elseif ($is_gpu_available && $gpu_method === 'amf') {
-        // AMD AMF加速 (仅Windows)
-        if (empty($quality_param)) {
-            $command = "-hwaccel amf -i \"$input_file\" -c:v h264_amf -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-        } else {
-            $command = "-hwaccel amf -i \"$input_file\" -c:v h264_amf $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-        }
-    } elseif ($is_gpu_available && $gpu_method === 'dxva2') {
-        // DXVA2加速 (仅Windows)
-        if (empty($quality_param)) {
-            $command = "-hwaccel dxva2 -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-        } else {
-            $command = "-hwaccel dxva2 -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-        }
-    } elseif ($is_gpu_available && $gpu_method === 'd3d11va') {
-        // D3D11VA加速 (仅Windows)
-        if (empty($quality_param)) {
-            $command = "-hwaccel d3d11va -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-        } else {
-            $command = "-hwaccel d3d11va -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-        }
-    } elseif ($is_gpu_available && $gpu_method === 'vaapi' && !IS_WINDOWS) {
-        // VAAPI加速 (仅Linux)
-        if (empty($quality_param)) {
-            $command = "-hwaccel vaapi -i \"$input_file\" -c:v h264_vaapi -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-        } else {
-            $command = "-hwaccel vaapi -i \"$input_file\" -c:v h264_vaapi $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        
+        if ($is_gpu_available && $gpu_method === 'cuda') {
+            // NVIDIA CUDA加速 (Windows/Linux)
+            if (empty($quality_param)) {
+                $command = "-hwaccel cuda -i \"$input_file\" -c:v h264_nvenc -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            } else {
+                $command = "-hwaccel cuda -i \"$input_file\" -c:v h264_nvenc $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            }
+        } elseif ($is_gpu_available && $gpu_method === 'amf') {
+            // AMD AMF加速 (仅Windows)
+            if (empty($quality_param)) {
+                $command = "-hwaccel amf -i \"$input_file\" -c:v h264_amf -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            } else {
+                $command = "-hwaccel amf -i \"$input_file\" -c:v h264_amf $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            }
+        } elseif ($is_gpu_available && $gpu_method === 'dxva2') {
+            // DXVA2加速 (仅Windows)
+            if (empty($quality_param)) {
+                $command = "-hwaccel dxva2 -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            } else {
+                $command = "-hwaccel dxva2 -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            }
+        } elseif ($is_gpu_available && $gpu_method === 'd3d11va') {
+            // D3D11VA加速 (仅Windows)
+            if (empty($quality_param)) {
+                $command = "-hwaccel d3d11va -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            } else {
+                $command = "-hwaccel d3d11va -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            }
+        } elseif ($is_gpu_available && $gpu_method === 'vaapi' && !IS_WINDOWS) {
+            // VAAPI加速 (仅Linux)
+            if (empty($quality_param)) {
+                $command = "-hwaccel vaapi -i \"$input_file\" -c:v h264_vaapi -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            } else {
+                $command = "-hwaccel vaapi -i \"$input_file\" -c:v h264_vaapi $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            }
         }
     }
     
@@ -310,7 +317,17 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
     $error = '';
     $success = execute_ffmpeg($command, $output, $error);
     
-    if (!$success) {
+    if (!$success && $quality === 'original') {
+        // 源画质模式失败，尝试回退到转码模式
+        error_log('源画质模式失败，回退到转码模式');
+        $quality = '1080p';
+        $quality_param = $video_quality[$quality] ?? $video_quality['1080p'];
+        $base_command = "-i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        $command = $base_command;
+        $output = [];
+        $error = '';
+        $success = execute_ffmpeg($command, $output, $error);
+    } elseif (!$success) {
         // 转码失败，尝试使用更通用的CPU编码命令
         error_log('转码失败，尝试使用通用CPU编码命令');
         
@@ -630,18 +647,23 @@ function record_transcode_complete($record_id, $file_size, $duration, $image_url
     
     // 处理每条记录
     foreach ($existing_records as $record) {
+        // 安全获取 id，避免警告
+        $record_id_key = isset($record['id']) ? $record['id'] : (isset($record['filename']) ? md5($record['filename'] . (isset($record['start_time']) ? $record['start_time'] : '')) : uniqid());
+        
         // 如果是当前完成的记录，跳过，稍后将其放在数组开头
-        if ($record['id'] === $record_id) {
+        if ($record_id_key === $record_id) {
             continue;
         }
+        
         // 对于其他记录，只保留必要信息
         $new_record = [
-            'filename' => $record['filename'],
-            'end_time' => $record['end_time'] ?? '',
-            'duration' => $record['duration'] ?? 0,
-            'file_size' => $record['file_size'] ?? 0,
-            'image_url' => $record['image_url'] ?? '',
-            'm3u8_url' => $record['m3u8_url'] ?? ''
+            'id' => $record_id_key,
+            'filename' => isset($record['filename']) ? $record['filename'] : '',
+            'end_time' => isset($record['end_time']) ? $record['end_time'] : '',
+            'duration' => isset($record['duration']) ? $record['duration'] : 0,
+            'file_size' => isset($record['file_size']) ? $record['file_size'] : 0,
+            'image_url' => isset($record['image_url']) ? $record['image_url'] : '',
+            'm3u8_url' => isset($record['m3u8_url']) ? $record['m3u8_url'] : ''
         ];
         $new_records[] = $new_record;
     }
@@ -650,14 +672,16 @@ function record_transcode_complete($record_id, $file_size, $duration, $image_url
     // 查找原始记录以获取文件名
     $original_filename = '';
     foreach ($existing_records as $record) {
-        if ($record['id'] === $record_id) {
-            $original_filename = $record['filename'];
+        $record_id_key = isset($record['id']) ? $record['id'] : (isset($record['filename']) ? md5($record['filename'] . (isset($record['start_time']) ? $record['start_time'] : '')) : uniqid());
+        if ($record_id_key === $record_id) {
+            $original_filename = isset($record['filename']) ? $record['filename'] : '';
             break;
         }
     }
     
     // 创建新记录
     $current_record = [
+        'id' => $record_id,
         'filename' => $original_filename,
         'end_time' => date('Y-m-d H:i:s'),
         'duration' => $duration,
@@ -691,11 +715,15 @@ function record_transcode_failed($record_id, $error) {
     
     // 处理每条记录
     foreach ($existing_records as $record) {
+        // 安全获取 id，避免警告
+        $record_id_key = isset($record['id']) ? $record['id'] : (isset($record['filename']) ? md5($record['filename'] . (isset($record['start_time']) ? $record['start_time'] : '')) : uniqid());
+        
         // 如果是当前失败的记录
-        if ($record['id'] === $record_id) {
+        if ($record_id_key === $record_id) {
             // 创建简洁记录，只包含必要信息
             $new_record = [
-                'filename' => $record['filename'],
+                'id' => $record_id_key,
+                'filename' => isset($record['filename']) ? $record['filename'] : '',
                 'end_time' => date('Y-m-d H:i:s'),
                 'image_url' => '',
                 'm3u8_url' => ''
@@ -704,10 +732,11 @@ function record_transcode_failed($record_id, $error) {
         } else {
             // 对于其他记录，只保留必要信息
             $new_record = [
-                'filename' => $record['filename'],
-                'end_time' => $record['end_time'] ?? '',
-                'image_url' => $record['image_url'] ?? '',
-                'm3u8_url' => $record['m3u8_url'] ?? ''
+                'id' => $record_id_key,
+                'filename' => isset($record['filename']) ? $record['filename'] : '',
+                'end_time' => isset($record['end_time']) ? $record['end_time'] : '',
+                'image_url' => isset($record['image_url']) ? $record['image_url'] : '',
+                'm3u8_url' => isset($record['m3u8_url']) ? $record['m3u8_url'] : ''
             ];
             $new_records[] = $new_record;
         }
