@@ -63,7 +63,7 @@ $gpu_info = $system_info['gpu'];
     <div class="card">
         <h2>版本信息</h2>
         <div>
-            <strong>版本号:</strong> V2606.0807.20
+            <strong>版本号:</strong> V2606.0807.2532
         </div>
         <div style="margin-top: 10px; color: #666;">
             更新内容：优化代码架构，修复函数重复定义问题，添加临时目录自动清理，完善错误处理和安全检查
