@@ -3,8 +3,8 @@
 
 // 加载配置和函数
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/includes/functions.php';
-require_once __DIR__ . '/includes/hardware_detection.php';
+require_once __DIR__ . DS . 'includes/functions.php';
+require_once __DIR__ . DS . 'includes/hardware_detection.php';
 
 // 检测系统硬件信息
 $system_info = detect_system();
@@ -63,7 +63,7 @@ $gpu_info = $system_info['gpu'];
     <div class="card">
         <h2>版本信息</h2>
         <div>
-            <strong>版本号:</strong> V1.0.1
+            <strong>版本号:</strong> V1.1.0 (跨平台优化版)
         </div>
     </div>
 

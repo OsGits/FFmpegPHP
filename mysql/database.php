@@ -6,9 +6,13 @@ class Database {
     
     // 构造函数
     public function __construct($config = null) {
+        // 加载跨平台配置和函数
+        require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'config.php';
+        require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'includes/functions.php';
+        
         if ($config === null) {
             // 读取配置文件
-            $configFile = dirname(__DIR__) . '/config.json';
+            $configFile = safe_path(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'config.json');
             if (file_exists($configFile)) {
                 $config = json_decode(file_get_contents($configFile), true);
             } else {

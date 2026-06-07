@@ -3,7 +3,7 @@
 
 // 加载配置和函数
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . DS . 'includes/functions.php';
 
 // 处理清理记录请求
 if (isset($_POST['clear_records'])) {
@@ -94,6 +94,32 @@ $completed_transcodes = get_completed_transcode_records();
                 <button type="submit" name="clear_records" class="clear-btn">清理记录</button>
             </form>
         </div>
+        
+        <!-- 记录文件信息 -->
+        <div style="padding: 10px; background-color: #f0f8ff; border-radius: 4px; margin-bottom: 20px;">
+            <strong>记录文件位置:</strong> <code><?php echo htmlspecialchars(get_transcode_record_file()); ?></code>
+            <br>
+            <strong>记录文件状态:</strong> <?php 
+                $record_file = get_transcode_record_file();
+                if (file_exists($record_file)) {
+                    echo '<span style="color: #27ae60;">✅ 存在</span>';
+                    $filesize = filesize($record_file);
+                    echo ' (' . $filesize . ' 字节)';
+                } else {
+                    echo '<span style="color: #e74c3c;">❌ 不存在</span>';
+                }
+            ?>
+            <br>
+            <strong>目录可写:</strong> <?php 
+                $dir = dirname(get_transcode_record_file());
+                if (is_writable($dir)) {
+                    echo '<span style="color: #27ae60;">✅ 可写</span>';
+                } else {
+                    echo '<span style="color: #e74c3c;">❌ 不可写</span>';
+                }
+            ?>
+        </div>
+        
         <?php 
         // 限制只显示30条记录
         $limited_transcodes = array_slice($completed_transcodes, 0, 30);
@@ -106,11 +132,18 @@ $completed_transcodes = get_completed_transcode_records();
                 <?php endforeach; ?>
             </div>
             <div class="note">
-                <strong>提示:</strong> 记录只显示30条，多余记录可前往 <code>e:\wwwroot\z.m\ting.json</code> 查看
+                <strong>提示:</strong> 记录只显示30条，多余记录可前往 <code><?php echo htmlspecialchars(get_transcode_record_file()); ?></code> 查看
             </div>
         <?php else: ?>
             <div class="transcode-item">
                 <strong>暂无转码记录</strong>
+                <p style="margin-top: 10px; color: #666;">
+                    如果您之前有转码过但看不到记录，可能是因为：
+                </p>
+                <ul style="margin-top: 5px; color: #666;">
+                    <li>记录文件在其他位置（如根目录），请检查文件系统</li>
+                    <li>目录没有写入权限，导致无法保存新记录</li>
+                </ul>
             </div>
         <?php endif; ?>
     </div>

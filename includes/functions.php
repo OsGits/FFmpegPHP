@@ -2,7 +2,7 @@
 // 工具函数
 
 // 加载配置
-require_once ROOT_DIR . '/config.php';
+require_once ROOT_DIR . DS . 'config.php';
 
 // 生成唯一文件名
 function generate_unique_filename($extension) {
@@ -30,14 +30,45 @@ function validate_extension($filename) {
 // 验证路径安全性（防止路径遍历）
 function validate_path($path) {
     // 检查是否包含路径遍历字符
-    if (strpos($path, '..') !== false || strpos($path, '\\') !== false) {
+    if (strpos($path, '..') !== false) {
         return false;
     }
-    // 检查是否为绝对路径
-    if (substr($path, 0, 1) === '/' || substr($path, 1, 2) === ':/') {
+    // 检查是否为绝对路径（Windows和Linux）
+    if (substr($path, 0, 1) === '/' || substr($path, 1, 2) === ':/' || substr($path, 1, 2) === ':\\') {
         return false;
     }
     return true;
+}
+
+// 跨平台文件路径处理函数
+function safe_path($path) {
+    // 统一路径分隔符
+    $path = str_replace(['/', '\\'], DS, $path);
+    // 移除多余的路径分隔符
+    $path = preg_replace('#' . preg_quote(DS, '#') . '+#', DS, $path);
+    return $path;
+}
+
+// 安全获取文件名（处理编码问题）
+function safe_filename($filename) {
+    if (IS_WINDOWS) {
+        // Windows系统上尝试处理文件名编码
+        if (function_exists('iconv')) {
+            $filename = iconv('UTF-8', 'GBK//IGNORE', $filename);
+        }
+    }
+    return $filename;
+}
+
+// 安全读取目录文件名
+function safe_readdir($filename) {
+    if (IS_WINDOWS) {
+        // Windows系统上转换编码
+        if (function_exists('iconv')) {
+            return iconv('GBK', 'UTF-8//IGNORE', $filename);
+        }
+    }
+    return $filename;
 }
 
 // 上传文件
@@ -58,14 +89,11 @@ function upload_file($file) {
     
     // 处理文件名编码，确保中文文件名正确
     $original_name = $file['name'];
-    // 在Windows系统上，可能需要转换编码
-    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        $original_name = iconv('UTF-8', 'GBK//IGNORE', $original_name);
-    }
+    $original_name = safe_filename($original_name);
     
     $extension = pathinfo($original_name, PATHINFO_EXTENSION);
     $filename = generate_unique_filename($extension);
-    $target_path = UPLOAD_DIR . '/' . $filename;
+    $target_path = safe_path(UPLOAD_DIR . DS . $filename);
     
     if (!move_uploaded_file($file['tmp_name'], $target_path)) {
         return ['error' => '文件移动失败'];
@@ -80,15 +108,10 @@ function get_server_files() {
     $dir = opendir(UPLOAD_DIR);
     while (($file = readdir($dir)) !== false) {
         if ($file != '.' && $file != '..') {
-            // 在Windows系统上，转换文件名编码为UTF-8
-            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-                $file_utf8 = iconv('GBK', 'UTF-8//IGNORE', $file);
-                // 构建正确的文件路径，避免双斜杠
-                $file_path = rtrim(UPLOAD_DIR, '/') . '/' . $file;
-            } else {
-                $file_utf8 = $file;
-                $file_path = rtrim(UPLOAD_DIR, '/') . '/' . $file;
-            }
+            // 安全处理文件名编码
+            $file_utf8 = safe_readdir($file);
+            // 构建正确的文件路径
+            $file_path = safe_path(UPLOAD_DIR . DS . $file);
             
             if (validate_extension($file_utf8)) {
                 // 安全地获取文件修改时间，避免open_basedir限制错误
@@ -102,7 +125,8 @@ function get_server_files() {
                 }
                 $files[] = [
                     'name' => $file_utf8,
-                    'time' => $file_time
+                    'time' => $file_time,
+                    'raw_name' => $file // 保留原始文件名用于文件操作
                 ];
             }
         }
@@ -113,12 +137,18 @@ function get_server_files() {
 
 // 执行FFmpeg命令（带命令注入防护）
 function execute_ffmpeg($command, &$output = null, &$error = null) {
+    // 检查exec函数是否被禁用
+    if (is_function_disabled('exec')) {
+        $error = 'exec() 函数被禁用，无法执行FFmpeg命令';
+        return false;
+    }
+    
     // 基本的命令注入防护 - 允许GPU加速相关参数
     $safe_commands = [
         '-i', '-c:v', '-c:a', '-hls_time', '-hls_list_size', '-f', '-ss', 
-        '-vframes', '-q:v', '-crf', '-hwaccel', '-t',
-        'libx264', 'aac', 'hls', 'h264_nvenc', 'h264_amf',
-        'cuda', 'dxva2', 'd3d11va', 'd3d12va', 'amf'
+        '-vframes', '-q:v', '-crf', '-hwaccel', '-t', '-vf', '-preset',
+        'libx264', 'aac', 'hls', 'h264_nvenc', 'h264_amf', 'copy',
+        'cuda', 'dxva2', 'd3d11va', 'd3d12va', 'amf', 'vaapi', 'vdpau'
     ];
     
     // 检查命令是否包含安全的参数
@@ -152,12 +182,30 @@ function execute_ffmpeg($command, &$output = null, &$error = null) {
         }
     }
     
-    // 确保FFMPEG_PATH被正确包围在双引号中，以处理路径中的空格
-    $full_command = '"' . FFMPEG_PATH . '" ' . $command;
-    exec($full_command . ' 2>&1', $output, $return_var);
+    // 构建完整命令，确保FFMPEG_PATH被正确处理
+    $ffmpeg_path = FFMPEG_PATH;
+    // 处理路径中的空格
+    if (strpos($ffmpeg_path, ' ') !== false && strpos($ffmpeg_path, '"') === false) {
+        $ffmpeg_path = '"' . $ffmpeg_path . '"';
+    }
+    
+    $full_command = $ffmpeg_path . ' ' . $command;
+    
+    // 使用跨平台方式执行命令
+    $output = [];
+    $return_var = 0;
+    
+    if (IS_WINDOWS) {
+        // Windows上需要特殊处理
+        $full_command = 'cmd /c ' . escapeshellarg($full_command) . ' 2>&1';
+    } else {
+        $full_command = $full_command . ' 2>&1';
+    }
+    
+    exec($full_command, $output, $return_var);
     
     if ($return_var !== 0) {
-        $error = implode('\n', $output);
+        $error = implode(PHP_EOL, $output);
         return false;
     }
     
@@ -171,6 +219,10 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
     // 确保输出目录存在
     ensure_dir($output_dir);
     
+    // 安全处理路径
+    $input_file = safe_path($input_file);
+    $output_dir = safe_path($output_dir);
+    
     // 生成输出文件名 - 使用随机字符串.m3u8
     if ($random_string) {
         $filename = $random_string;
@@ -178,7 +230,7 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
         // 从输入文件名中提取文件名（不含扩展名）
         $filename = pathinfo($input_file, PATHINFO_FILENAME);
     }
-    $output_file = $output_dir . '/' . $filename . '.m3u8';
+    $output_file = safe_path($output_dir . DS . $filename . '.m3u8');
     
     // 获取视频信息，用于调试
     $video_info = get_video_info($input_file);
@@ -188,7 +240,7 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
     $quality_param = $video_quality[$quality] ?? $video_quality['1080p'];
     
     // 生成TS文件名格式 - 序号制度，例如：000001.ts
-    $ts_filename_pattern = $output_dir . '/%06d.ts';
+    $ts_filename_pattern = safe_path($output_dir . DS . '%06d.ts');
     
     // 构建基础命令，让FFmpeg自动处理输入编码
     // 只指定输出编码器，不指定输入编码器
@@ -201,33 +253,52 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
     
     // 根据GPU加速方法调整命令
     $command = $base_command;
-    if ($gpu_method === 'cuda') {
-        // NVIDIA CUDA加速
+    
+    // 检查GPU方法是否适用于当前平台
+    $is_gpu_available = true;
+    if ($gpu_method !== 'none') {
+        // 在非Windows平台上检查GPU方法兼容性
+        if (!IS_WINDOWS && in_array($gpu_method, ['dxva2', 'd3d11va', 'amf'])) {
+            error_log("GPU方法 $gpu_method 不适用于当前平台，使用CPU编码");
+            $is_gpu_available = false;
+            $gpu_method = 'none';
+        }
+    }
+    
+    if ($is_gpu_available && $gpu_method === 'cuda') {
+        // NVIDIA CUDA加速 (Windows/Linux)
         if (empty($quality_param)) {
             $command = "-hwaccel cuda -i \"$input_file\" -c:v h264_nvenc -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         } else {
             $command = "-hwaccel cuda -i \"$input_file\" -c:v h264_nvenc $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         }
-    } elseif ($gpu_method === 'amf') {
-        // AMD AMF加速
+    } elseif ($is_gpu_available && $gpu_method === 'amf') {
+        // AMD AMF加速 (仅Windows)
         if (empty($quality_param)) {
             $command = "-hwaccel amf -i \"$input_file\" -c:v h264_amf -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         } else {
             $command = "-hwaccel amf -i \"$input_file\" -c:v h264_amf $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         }
-    } elseif ($gpu_method === 'dxva2') {
-        // DXVA2加速
+    } elseif ($is_gpu_available && $gpu_method === 'dxva2') {
+        // DXVA2加速 (仅Windows)
         if (empty($quality_param)) {
             $command = "-hwaccel dxva2 -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         } else {
             $command = "-hwaccel dxva2 -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         }
-    } elseif ($gpu_method === 'd3d11va') {
-        // D3D11VA加速
+    } elseif ($is_gpu_available && $gpu_method === 'd3d11va') {
+        // D3D11VA加速 (仅Windows)
         if (empty($quality_param)) {
             $command = "-hwaccel d3d11va -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         } else {
             $command = "-hwaccel d3d11va -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        }
+    } elseif ($is_gpu_available && $gpu_method === 'vaapi' && !IS_WINDOWS) {
+        // VAAPI加速 (仅Linux)
+        if (empty($quality_param)) {
+            $command = "-hwaccel vaapi -i \"$input_file\" -c:v h264_vaapi -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        } else {
+            $command = "-hwaccel vaapi -i \"$input_file\" -c:v h264_vaapi $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         }
     }
     
@@ -259,6 +330,7 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
         
         // 备用命令成功，使用备用命令的结果
         $command = $fallback_command;
+        $gpu_method = 'none';
     }
     
     // 获取生成的文件列表
@@ -286,6 +358,10 @@ function generate_screenshot($input_file, $output_dir, $time = 10, $random_strin
     // 确保输出目录存在
     ensure_dir($output_dir);
     
+    // 安全处理路径
+    $input_file = safe_path($input_file);
+    $output_dir = safe_path($output_dir);
+    
     // 生成输出文件名 - 使用随机字符串.jpg
     if ($random_string) {
         $filename = $random_string;
@@ -293,7 +369,7 @@ function generate_screenshot($input_file, $output_dir, $time = 10, $random_strin
         // 从输入文件名中提取文件名（不含扩展名）
         $filename = pathinfo($input_file, PATHINFO_FILENAME);
     }
-    $output_file = $output_dir . '/' . $filename . '.jpg';
+    $output_file = safe_path($output_dir . DS . $filename . '.jpg');
     
     // 构建FFmpeg命令
     $command = "-i \"$input_file\" -ss $time -vframes 1 -q:v 2 \"$output_file\"";
@@ -335,6 +411,7 @@ function format_time($seconds) {
 
 // 获取视频信息
 function get_video_info($input_file) {
+    $input_file = safe_path($input_file);
     $command = "-i \"$input_file\"";
     $output = [];
     $error = '';
@@ -364,8 +441,42 @@ function get_video_info($input_file) {
     return $info;
 }
 
+// 使用ffprobe获取视频时长（更可靠的方法）
+function get_video_duration_ffprobe($input_file) {
+    // 检查exec函数是否被禁用
+    if (is_function_disabled('exec')) {
+        return 0;
+    }
+    
+    $input_file = safe_path($input_file);
+    $ffprobe_path = get_ffprobe_path();
+    
+    // 构建ffprobe命令
+    $command = '-v quiet -show_entries format=duration -of csv=p=0 "' . $input_file . '"';
+    
+    // 执行命令
+    $output = [];
+    $return_var = 0;
+    
+    if (IS_WINDOWS) {
+        $full_command = 'cmd /c ' . escapeshellarg('"' . $ffprobe_path . '" ' . $command) . ' 2>&1';
+    } else {
+        $full_command = '"' . $ffprobe_path . '" ' . $command . ' 2>&1';
+    }
+    
+    exec($full_command, $output, $return_var);
+    
+    if ($return_var === 0 && !empty($output)) {
+        $duration = floatval($output[0]);
+        return $duration;
+    }
+    
+    return 0; // 失败时返回0
+}
+
 // 删除文件
 function delete_file($file_path) {
+    $file_path = safe_path($file_path);
     if (file_exists($file_path)) {
         return unlink($file_path);
     }
@@ -374,10 +485,18 @@ function delete_file($file_path) {
 
 // 清理输出目录
 function cleanup_output($output_dir) {
+    $output_dir = safe_path($output_dir);
+    if (!is_dir($output_dir)) {
+        return;
+    }
+    
     $dir = opendir($output_dir);
     while (($file = readdir($dir)) !== false) {
         if ($file != '.' && $file != '..') {
-            unlink($output_dir . '/' . $file);
+            $file_path = safe_path($output_dir . DS . $file);
+            if (is_file($file_path)) {
+                unlink($file_path);
+            }
         }
     }
     closedir($dir);
@@ -395,17 +514,57 @@ function get_success_message($message) {
 
 // 转码记录相关函数
 
-// 转码记录文件路径
-function get_transcode_record_file() {
-    return ROOT_DIR . '/ting.json';
+// 获取可能的转码记录文件位置
+function get_possible_record_files($filename) {
+    return [
+        safe_path(ROOT_DIR . DS . $filename),
+        safe_path(ROOT_DIR . DS . 'data' . DS . $filename)
+    ];
 }
 
-// 读取转码记录
+// 查找转码记录文件（先找现有文件，再找可写目录）
+function find_record_file($filename) {
+    $possible_files = get_possible_record_files($filename);
+    
+    // 先检查是否有现有文件
+    foreach ($possible_files as $file) {
+        if (file_exists($file)) {
+            return $file;
+        }
+    }
+    
+    // 没有现有文件，找第一个可写的目录创建
+    foreach ($possible_files as $file) {
+        $dir = dirname($file);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        if (is_dir($dir) && is_writable($dir)) {
+            return $file;
+        }
+    }
+    
+    // 如果都不可写，返回第一个位置
+    return $possible_files[0];
+}
+
+// 转码记录文件路径
+function get_transcode_record_file() {
+    return find_record_file('ting.json');
+}
+
+// 读取转码记录（尝试从所有可能的位置读取，避免丢失旧记录）
 function read_transcode_records() {
-    $record_file = get_transcode_record_file();
-    if (file_exists($record_file)) {
-        $content = file_get_contents($record_file);
-        return json_decode($content, true) ?? [];
+    $possible_files = get_possible_record_files('ting.json');
+    
+    foreach ($possible_files as $file) {
+        if (file_exists($file)) {
+            $content = @file_get_contents($file);
+            $records = json_decode($content, true) ?? [];
+            if (!empty($records)) {
+                return $records;
+            }
+        }
     }
     return [];
 }
@@ -413,25 +572,22 @@ function read_transcode_records() {
 // 保存转码记录
 function save_transcode_records($records) {
     $record_file = get_transcode_record_file();
-    $content = json_encode($records, JSON_PRETTY_PRINT);
+    $content = json_encode($records, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     
     // 确保文件所在目录存在
     $dir = dirname($record_file);
     if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
+        @mkdir($dir, 0755, true);
     }
     
-    // 确保文件有写入权限
-    if (file_exists($record_file) && !is_writable($record_file)) {
-        chmod($record_file, 0644);
-    }
-    
-    return file_put_contents($record_file, $content);
+    // 尝试保存
+    $result = @file_put_contents($record_file, $content);
+    return $result !== false;
 }
 
 // 获取当前转码任务文件路径
 function get_current_transcode_file() {
-    return ROOT_DIR . '/current_transcode.json';
+    return find_record_file('current_transcode.json');
 }
 
 // 记录转码开始
@@ -516,10 +672,12 @@ function record_transcode_complete($record_id, $file_size, $duration, $image_url
     // 保存简洁记录
     save_transcode_records($new_records);
     
-    // 删除临时文件，清除当前转码任务跟踪
-    $current_transcode_file = get_current_transcode_file();
-    if (file_exists($current_transcode_file)) {
-        unlink($current_transcode_file);
+    // 删除临时文件，清除当前转码任务跟踪（从所有可能的位置）
+    $possible_current_files = get_possible_record_files('current_transcode.json');
+    foreach ($possible_current_files as $file) {
+        if (file_exists($file)) {
+            @unlink($file);
+        }
     }
 }
 
@@ -558,19 +716,24 @@ function record_transcode_failed($record_id, $error) {
     // 保存简洁记录
     save_transcode_records($new_records);
     
-    // 删除临时文件，清除当前转码任务跟踪
-    $current_transcode_file = get_current_transcode_file();
-    if (file_exists($current_transcode_file)) {
-        unlink($current_transcode_file);
+    // 删除临时文件，清除当前转码任务跟踪（从所有可能的位置）
+    $possible_current_files = get_possible_record_files('current_transcode.json');
+    foreach ($possible_current_files as $file) {
+        if (file_exists($file)) {
+            @unlink($file);
+        }
     }
 }
 
-// 获取当前正在转码的任务
+// 获取当前正在转码的任务（尝试从多个位置读取）
 function get_current_transcode_task() {
-    $current_transcode_file = get_current_transcode_file();
-    if (file_exists($current_transcode_file)) {
-        $content = file_get_contents($current_transcode_file);
-        return json_decode($content, true) ?? null;
+    $possible_files = get_possible_record_files('current_transcode.json');
+    
+    foreach ($possible_files as $file) {
+        if (file_exists($file)) {
+            $content = @file_get_contents($file);
+            return json_decode($content, true) ?? null;
+        }
     }
     return null;
 }
@@ -588,7 +751,13 @@ function get_completed_transcode_records() {
 // 清理转码记录
 function clear_transcode_records() {
     $record_file = get_transcode_record_file();
+    // 确保目录存在
+    $dir = dirname($record_file);
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
     // 写入空数组到记录文件
-    return file_put_contents($record_file, json_encode([], JSON_PRETTY_PRINT));
+    $result = @file_put_contents($record_file, json_encode([], JSON_PRETTY_PRINT));
+    return $result !== false;
 }
 ?>

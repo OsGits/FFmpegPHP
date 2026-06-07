@@ -3,21 +3,22 @@
 
 // 加载配置和硬件检测
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/includes/hardware_detection.php';
+require_once __DIR__ . DS . 'includes/functions.php';
+require_once __DIR__ . DS . 'includes/hardware_detection.php';
 
 // 检测系统硬件信息
 $system_info = detect_system();
 $gpu_info = $system_info['gpu'];
 
-// 配置文件路径
-$config_file = __DIR__ . '/config.json';
+// 使用 config.php 中定义的配置文件路径
+$config_file = defined('CONFIG_FILE_PATH') ? CONFIG_FILE_PATH : safe_path(__DIR__ . DS . 'config.json');
 
 // 读取现有配置
 function read_config() {
     global $config_file;
     if (file_exists($config_file)) {
-        $content = file_get_contents($config_file);
-        return json_decode($content, true);
+        $content = @file_get_contents($config_file);
+        return json_decode($content, true) ?? [];
     }
     return [];
 }
@@ -25,8 +26,21 @@ function read_config() {
 // 保存配置
 function save_config($config) {
     global $config_file;
-    $content = json_encode($config, JSON_PRETTY_PRINT);
-    return file_put_contents($config_file, $content);
+    $content = json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    
+    // 检查目录是否可写
+    $dir = dirname($config_file);
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    
+    if (!is_writable($dir)) {
+        return false;
+    }
+    
+    // 尝试保存
+    $result = @file_put_contents($config_file, $content);
+    return $result !== false;
 }
 
 // 处理POST请求
@@ -39,6 +53,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // 基础设置
         if (isset($_POST['ffmpeg_path'])) {
             $config['ffmpeg_path'] = $_POST['ffmpeg_path'] ?? 'ffmpeg';
+        }
+        if (isset($_POST['ffprobe_path'])) {
+            $config['ffprobe_path'] = $_POST['ffprobe_path'] ?? 'ffprobe';
         }
         if (isset($_POST['gpu_acceleration'])) {
             $config['gpu_acceleration'] = $_POST['gpu_acceleration'] ?? 'none';
@@ -91,16 +108,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     // 保存配置
+    $dir = dirname($config_file);
+    $dir_writable = is_writable($dir);
+    
     if (save_config($config)) {
         $message = '<div class="success">设置保存成功</div>';
     } else {
-        $message = '<div class="error">设置保存失败</div>';
+        $error_msg = '设置保存失败';
+        if (!$dir_writable) {
+            $error_msg .= ' - 目录无写入权限，请检查 ' . htmlspecialchars($dir) . ' 的权限';
+        }
+        $message = '<div class="error">' . $error_msg . '</div>';
     }
 }
 
 // 读取当前配置
 $current_config = read_config();
 $current_ffmpeg_path = $current_config['ffmpeg_path'] ?? FFMPEG_PATH;
+$current_ffprobe_path = $current_config['ffprobe_path'] ?? FFPROBE_PATH;
 $current_input_dir = $current_config['input_dir'] ?? './vodoss/';
 $current_output_dir = $current_config['output_dir'] ?? './m3u8/';
 $current_base_url = $current_config['base_url'] ?? '';
@@ -118,18 +143,91 @@ $current_mysql_user = $current_config['mysql_user'] ?? 'root';
 $current_mysql_password = $current_config['mysql_password'] ?? '';
 $current_m3u8_full_url = $current_config['m3u8_full_url'] ?? '';
 
+// 检查函数是否被禁用（本地副本）
+function is_func_disabled($func_name) {
+    $disabled = explode(',', ini_get('disable_functions'));
+    $disabled = array_map('trim', $disabled);
+    return in_array($func_name, $disabled);
+}
+
 // 验证FFmpeg路径
 function test_ffmpeg_path($path) {
+    if (is_func_disabled('exec')) {
+        return false;
+    }
     $output = [];
     $return_var = 0;
-    exec($path . ' -version 2>&1', $output, $return_var);
+    if (IS_WINDOWS) {
+        $full_command = 'cmd /c ' . escapeshellarg($path . ' -version') . ' 2>&1';
+    } else {
+        $full_command = $path . ' -version 2>&1';
+    }
+    @exec($full_command, $output, $return_var);
+    return $return_var === 0;
+}
+
+// 验证FFprobe路径
+function test_ffprobe_path($path) {
+    if (is_func_disabled('exec')) {
+        return false;
+    }
+    $output = [];
+    $return_var = 0;
+    if (IS_WINDOWS) {
+        $full_command = 'cmd /c ' . escapeshellarg($path . ' -version') . ' 2>&1';
+    } else {
+        $full_command = $path . ' -version 2>&1';
+    }
+    @exec($full_command, $output, $return_var);
     return $return_var === 0;
 }
 
 $ffmpeg_status = test_ffmpeg_path($current_ffmpeg_path) ? '可用' : '不可用';
+$ffprobe_status = test_ffprobe_path($current_ffprobe_path) ? '可用' : '不可用';
 ?>
 
 <?php include __DIR__ . '/includes/header.php'; ?>
+
+    <!-- 权限信息 -->
+    <div class="card">
+        <h2>系统状态</h2>
+        <?php
+        $config_dir = dirname($config_file);
+        $is_writable = is_writable($config_dir);
+        $config_exists = file_exists($config_file);
+        
+        // 检查根目录和 data 目录的情况
+        $root_dir = __DIR__;
+        $root_writable = is_writable($root_dir);
+        $data_dir = __DIR__ . DS . 'data';
+        $data_dir_exists = is_dir($data_dir);
+        $data_writable = $data_dir_exists && is_writable($data_dir);
+        ?>
+        <div style="padding: 10px; background: <?php echo $is_writable ? '#d4edda' : '#f8d7da'; ?>; border-radius: 4px; margin-bottom: 10px;">
+            <strong>配置目录状态：</strong>
+            <span style="color: <?php echo $is_writable ? '#155724' : '#721c24'; ?>;">
+                <?php echo $is_writable ? '可写入' : '不可写入'; ?>
+            </span>
+            (<?php echo htmlspecialchars($config_dir); ?>)
+        </div>
+        <div style="padding: 10px; background: <?php echo $config_exists ? '#d1ecf1' : '#fff3cd'; ?>; border-radius: 4px; margin-bottom: 10px;">
+            <strong>配置文件状态：</strong>
+            <span style="color: <?php echo $config_exists ? '#0c5460' : '#856404'; ?>;">
+                <?php echo $config_exists ? '已存在' : '不存在'; ?>
+            </span>
+            (<?php echo htmlspecialchars($config_file); ?>)
+        </div>
+        
+        <?php if (!$root_writable || !$data_writable): ?>
+        <div style="padding: 10px; background: #fff3cd; border-radius: 4px; margin-bottom: 10px;">
+            <strong>目录权限提示：</strong>
+            <ul style="margin-top: 5px; margin-left: 20px;">
+                <li>根目录 (<?php echo htmlspecialchars($root_dir); ?>): <?php echo $root_writable ? '可写' : '不可写'; ?></li>
+                <li>data目录 (<?php echo htmlspecialchars($data_dir); ?>): <?php echo $data_writable ? '可写' : ($data_dir_exists ? '不可写' : '不存在'); ?></li>
+            </ul>
+        </div>
+        <?php endif; ?>
+    </div>
 
     <!-- 选项卡导航 -->
     <div class="tab-navigation">
@@ -149,6 +247,15 @@ $ffmpeg_status = test_ffmpeg_path($current_ffmpeg_path) ? '可用' : '不可用'
                 <input type="text" id="ffmpeg_path" name="ffmpeg_path" value="<?php echo htmlspecialchars($current_ffmpeg_path); ?>" placeholder="例如: C:/ffmpeg/bin/ffmpeg.exe">
                 <small>如果已添加到系统PATH，可直接使用 'ffmpeg'</small>
                 <small>这里是ffmpeg程序路径，不是目录路径，需要包含ffmpeg.exe文件</small>
+                <small>状态: <span style="color: <?php echo $ffmpeg_status === '可用' ? 'green' : 'red'; ?>;"><?php echo $ffmpeg_status; ?></span></small>
+            </div>
+            
+            <div class="form-group">
+                <label for="ffprobe_path">FFprobe路径</label>
+                <input type="text" id="ffprobe_path" name="ffprobe_path" value="<?php echo htmlspecialchars($current_ffprobe_path); ?>" placeholder="例如: C:/ffmpeg/bin/ffprobe.exe">
+                <small>如果已添加到系统PATH，可直接使用 'ffprobe'</small>
+                <small>用于获取视频信息，可选但推荐配置</small>
+                <small>状态: <span style="color: <?php echo $ffprobe_status === '可用' ? 'green' : 'red'; ?>;"><?php echo $ffprobe_status; ?></span></small>
             </div>
             
 
@@ -233,6 +340,49 @@ $ffmpeg_status = test_ffmpeg_path($current_ffmpeg_path) ? '可用' : '不可用'
                 <li><strong>转码后保存目录</strong>：存放转码完成后的文件的目录，默认为 ./m3u8/。</li>
                 <li><strong>路径格式</strong>：使用相对路径，以 ./ 开头，表示项目根目录。</li>
             </ul>
+        </div>
+        
+        <div class="card">
+            <h2>权限问题提示</h2>
+            <p>如果设置无法保存，可能是目录无写入权限。您可以：</p>
+            <ol>
+                <li>
+                    <strong>修改目录权限：</strong>
+                    <p>确保以下目录有写入权限（755或777）：</p>
+                    <ul>
+                        <li>根目录：<?php echo htmlspecialchars(__DIR__); ?></li>
+                        <li>或 data 目录：<?php echo htmlspecialchars(__DIR__ . DS . 'data'); ?></li>
+                    </ul>
+                    <p>在 Linux 系统上，可以执行：</p>
+                    <pre style="background: #f5f5f5; padding: 8px; border-radius: 4px;">chmod 755 <?php echo htmlspecialchars(__DIR__); ?></pre>
+                    或者
+                    <pre style="background: #f5f5f5; padding: 8px; border-radius: 4px;">mkdir -p <?php echo htmlspecialchars(__DIR__ . DS . 'data'); ?> && chmod 755 <?php echo htmlspecialchars(__DIR__ . DS . 'data'); ?></pre>
+                </li>
+                <li>
+                    <strong>手动修改配置文件：</strong>
+                    <p>创建配置文件并填入以下内容：</p>
+                    <p><strong>配置文件位置：</strong><?php echo htmlspecialchars($config_file); ?></p>
+                    <p><strong>config.json 格式示例：</strong></p>
+                    <pre style="background: #f5f5f5; padding: 10px; border: 1px solid #ddd; border-radius: 4px; overflow-x: auto;">{
+    "ffmpeg_path": "ffmpeg",
+    "ffprobe_path": "ffprobe",
+    "input_dir": "./vodoss/",
+    "output_dir": "./m3u8/",
+    "base_url": "",
+    "segment_duration": 10,
+    "screenshot_time": 10,
+    "quality": "1080p",
+    "use_gpu": 0,
+    "mysql_enabled": 0,
+    "mysql_host": "localhost",
+    "mysql_port": "3306",
+    "mysql_db": "vod_system",
+    "mysql_user": "root",
+    "mysql_password": "",
+    "m3u8_full_url": ""
+}</pre>
+                </li>
+            </ol>
         </div>
     </div>
 

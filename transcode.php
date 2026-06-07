@@ -3,8 +3,8 @@
 
 // 加载配置和函数
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/includes/functions.php';
-require_once __DIR__ . '/includes/hardware_detection.php';
+require_once __DIR__ . DS . 'includes/functions.php';
+require_once __DIR__ . DS . 'includes/hardware_detection.php';
 
 // 检测系统硬件信息
 $system_info = detect_system();
@@ -115,13 +115,9 @@ $paged_files = array_slice($server_files, $start_index, $page_size);
                             </div>
                             <div style="font-size: 14px; color: #666; display: flex; gap: 20px;">
                                 <?php 
-                                    // 处理Windows系统的文件名编码问题
-                                    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-                                        $file_gbk = iconv('UTF-8', 'GBK//IGNORE', $file);
-                                        $file_path = UPLOAD_DIR . '/' . $file_gbk;
-                                    } else {
-                                        $file_path = UPLOAD_DIR . '/' . $file;
-                                    }
+                                    // 使用跨平台函数处理文件路径
+                                    $raw_file = isset($file_info['raw_name']) ? $file_info['raw_name'] : $file;
+                                    $file_path = safe_path(UPLOAD_DIR . DS . safe_filename($raw_file));
                                     $file_size = 0;
                                     $file_time = '';
                                     if (file_exists($file_path)) {
