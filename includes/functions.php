@@ -947,65 +947,109 @@ function process_single_file($file, $output_dir, $base_url, $segment_duration, $
     $transcode_time = round($end_time - $start_time, 2);
     
     // 尝试保存到数据库
+    $db_save_result = null;
     $final_image_url = '';
     $final_m3u8_url = '';
     $video_duration = '未知';
-    
+
     try {
-        // 读取配置文件
-        $configFile = safe_path(ROOT_DIR . DS . 'config.json');
-        if (file_exists($configFile)) {
-            $config = @json_decode(@file_get_contents($configFile), true);
+        // 读取配置文件 - 使用 data 目录下的配置文件
+        $configFile = safe_path(ROOT_DIR . DS . 'data' . DS . 'config.json');
+        
+        error_log('数据库配置文件路径: ' . ($configFile ?: '未找到'));
+        
+        if ($configFile && file_exists($configFile)) {
+            $configContent = @file_get_contents($configFile);
+            $config = @json_decode($configContent, true);
             
+            error_log('配置文件内容: ' . ($configContent ? '已读取' : '空内容'));
+            error_log('配置解析结果: ' . ($config ? '成功' : '失败'));
+            
+            if ($config) {
+                error_log('mysql_enabled配置值: ' . ($config['mysql_enabled'] ?? '未设置'));
+            }
+
             // 检查数据库功能是否启用
             if (isset($config['mysql_enabled']) && $config['mysql_enabled'] == 1) {
+                error_log('数据库功能已启用，开始保存视频信息');
+                
                 // 包含数据库操作类
                 require_once ROOT_DIR . DS . 'mysql/database.php';
-                
-                // 创建数据库实例
-                $db = new Database($config);
-                
-                // 获取视频时长
-                $video_duration_seconds = get_video_duration_ffprobe($input_path);
-                if ($video_duration_seconds > 0) {
-                    if ($video_duration_seconds >= 3600) {
-                        $video_duration = gmdate('H:i:s', $video_duration_seconds);
-                    } else {
-                        $video_duration = gmdate('i:s', $video_duration_seconds);
+
+                try {
+                    // 创建数据库实例
+                    $db = new Database($config);
+                    error_log('数据库连接成功');
+                    
+                    // 获取视频时长
+                    $video_duration_seconds = get_video_duration_ffprobe($input_path);
+                    if ($video_duration_seconds > 0) {
+                        if ($video_duration_seconds >= 3600) {
+                            $video_duration = gmdate('H:i:s', $video_duration_seconds);
+                        } else {
+                            $video_duration = gmdate('i:s', $video_duration_seconds);
+                        }
                     }
+
+                    // 构建完整的链接
+                    $m3u8_full_url = $config['m3u8_full_url'] ?? '';
+                    $year = date('Y');
+                    $month = date('m');
+                    $day = date('d');
+                    $date_path = $year . '/' . $month . '/' . $day;
+
+                    if (!empty($m3u8_full_url)) {
+                        $final_image_url = rtrim($m3u8_full_url, '/') . '/' . $date_path . '/' . urlencode($random_dir_name) . '.jpg';
+                        $final_m3u8_url = rtrim($m3u8_full_url, '/') . '/' . $date_path . '/' . urlencode($random_dir_name) . '.m3u8';
+                    } else {
+                        $final_image_url = rtrim($base_url, '/') . '/m3u8/' . $date_path . '/' . urlencode($random_dir_name) . '.jpg';
+                        $final_m3u8_url = rtrim($base_url, '/') . '/m3u8/' . $date_path . '/' . urlencode($random_dir_name) . '.m3u8';
+                    }
+
+                    // 准备视频信息
+                    $videoInfo = [
+                        'vodmc' => pathinfo($original_filename, PATHINFO_FILENAME),
+                        'vodimg' => $final_image_url,
+                        'vodurl' => $final_m3u8_url,
+                        'vodsj' => $video_duration,
+                        'voddx' => $file_size_mb . 'MB'
+                    ];
+
+                    error_log('准备保存的视频信息: ' . json_encode($videoInfo));
+
+                    // 保存到数据库并获取结果
+                    $db_save_result = $db->saveVideoInfo($videoInfo);
+
+                    // 记录数据库保存结果
+                    if ($db_save_result['success']) {
+                        error_log('数据库保存成功: ' . json_encode($db_save_result));
+                    } else {
+                        error_log('数据库保存失败: ' . json_encode($db_save_result));
+                    }
+                } catch (Exception $dbEx) {
+                    error_log('数据库操作异常: ' . $dbEx->getMessage());
+                    $db_save_result = [
+                        'success' => false,
+                        'message' => '数据库操作异常: ' . $dbEx->getMessage()
+                    ];
                 }
-                
-                // 构建完整的链接
-                $m3u8_full_url = $config['m3u8_full_url'] ?? '';
-                $year = date('Y');
-                $month = date('m');
-                $day = date('d');
-                $date_path = $year . '/' . $month . '/' . $day;
-                
-                if (!empty($m3u8_full_url)) {
-                    $final_image_url = rtrim($m3u8_full_url, '/') . '/' . $date_path . '/' . urlencode($random_dir_name) . '.jpg';
-                    $final_m3u8_url = rtrim($m3u8_full_url, '/') . '/' . $date_path . '/' . urlencode($random_dir_name) . '.m3u8';
-                } else {
-                    $final_image_url = rtrim($base_url, '/') . '/m3u8/' . $date_path . '/' . urlencode($random_dir_name) . '.jpg';
-                    $final_m3u8_url = rtrim($base_url, '/') . '/m3u8/' . $date_path . '/' . urlencode($random_dir_name) . '.m3u8';
-                }
-                
-                // 准备视频信息
-                $videoInfo = [
-                    'vodmc' => pathinfo($original_filename, PATHINFO_FILENAME),
-                    'vodimg' => $final_image_url,
-                    'vodurl' => $final_m3u8_url,
-                    'vodsj' => $video_duration,
-                    'voddx' => $file_size_mb . 'MB'
-                ];
-                
-                // 保存到数据库
-                $db->saveVideoInfo($videoInfo);
+            } else {
+                error_log('数据库功能未启用 (mysql_enabled != 1)');
             }
+        } else {
+            error_log('配置文件不存在');
+            $db_save_result = [
+                'success' => false,
+                'message' => '配置文件不存在: ' . $configFile
+            ];
         }
     } catch (Exception $e) {
         // 记录错误但不影响转码流程
         error_log('数据库操作异常: ' . $e->getMessage());
+        $db_save_result = [
+            'success' => false,
+            'message' => '数据库操作异常: ' . $e->getMessage()
+        ];
     }
     
     // 创建年/月/日目录结构
@@ -1080,15 +1124,27 @@ function process_single_file($file, $output_dir, $base_url, $segment_duration, $
         echo '<p>转码时间: ' . $transcode_time . ' 秒</p>';
         echo '<p>文件大小: ' . $file_size_mb . ' MB</p>';
         echo '<p>M3U8链接: <a href="' . htmlspecialchars($final_m3u8_url) . '" target="_blank">' . htmlspecialchars($final_m3u8_url) . '</a></p>';
+
+        // 显示数据库保存状态
+        if ($db_save_result !== null) {
+            if ($db_save_result['success']) {
+                echo '<p style="color: green;">数据库保存状态: 成功 (记录ID: ' . htmlspecialchars($db_save_result['id'] ?? 'N/A') . ')</p>';
+            } else {
+                echo '<p style="color: red;">数据库保存状态: 失败 (' . htmlspecialchars($db_save_result['message'] ?? '未知错误') . ')</p>';
+            }
+        } else {
+            echo '<p style="color: orange;">数据库保存状态: 未执行（数据库功能未启用）</p>';
+        }
     }
-    
+
     return [
         'success' => true,
         'original_filename' => $original_filename,
         'transcode_time' => $transcode_time,
         'file_size_mb' => $file_size_mb,
         'final_image_url' => $final_image_url,
-        'final_m3u8_url' => $final_m3u8_url
+        'final_m3u8_url' => $final_m3u8_url,
+        'db_save_result' => $db_save_result
     ];
 }
 ?>

@@ -57,22 +57,30 @@ class Database {
     // 保存视频信息到数据库
     public function saveVideoInfo($videoInfo) {
         try {
+            // 检查是否启用数据库
+            if (!isset($this->config['mysql_enabled']) || $this->config['mysql_enabled'] != 1) {
+                return [
+                    'success' => false,
+                    'message' => '数据库功能未启用'
+                ];
+            }
+
             // 准备SQL语句
-            $sql = "INSERT INTO vodm3u8 (vodmc, vodimg, vodurl, vodsj, voddx) 
+            $sql = "INSERT INTO vodm3u8 (vodmc, vodimg, vodurl, vodsj, voddx)
                     VALUES (:vodmc, :vodimg, :vodurl, :vodsj, :voddx)";
-            
+
             $stmt = $this->pdo->prepare($sql);
-            
+
             // 绑定参数
             $stmt->bindParam(':vodmc', $videoInfo['vodmc'], PDO::PARAM_STR);
             $stmt->bindParam(':vodimg', $videoInfo['vodimg'], PDO::PARAM_STR);
             $stmt->bindParam(':vodurl', $videoInfo['vodurl'], PDO::PARAM_STR);
             $stmt->bindParam(':vodsj', $videoInfo['vodsj'], PDO::PARAM_STR);
             $stmt->bindParam(':voddx', $videoInfo['voddx'], PDO::PARAM_STR);
-            
+
             // 执行SQL
             $stmt->execute();
-            
+
             return [
                 'success' => true,
                 'id' => $this->pdo->lastInsertId(),
@@ -81,7 +89,8 @@ class Database {
         } catch (PDOException $e) {
             return [
                 'success' => false,
-                'message' => '保存失败: ' . $e->getMessage()
+                'message' => '保存失败: ' . $e->getMessage(),
+                'error_code' => $e->getCode()
             ];
         }
     }
