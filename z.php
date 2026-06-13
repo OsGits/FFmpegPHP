@@ -12,11 +12,22 @@ if (!file_exists($config_file)) {
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . DS . 'includes/functions.php';
 
+// 读取转码记录
+$ting_file = __DIR__ . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'ting.json';
+$transcode_records = [];
+if (file_exists($ting_file)) {
+    $transcode_records = json_decode(file_get_contents($ting_file), true) ?? [];
+}
+
 // 检查是否有正在进行的转码任务
 $current_task = get_current_transcode_task();
 
-// 如果没有任务，从vodoss目录中选择一个视频文件进行转码
-if (empty($current_task)) {
+// 如果有任务，显示任务状态并退出（只在空闲时才获取视频文件进行转码）
+if (!empty($current_task)) {
+    echo '<div class="info">自动转码中，请不要离开当前页面！</div>';
+    echo '<p>正在转码: ' . htmlspecialchars($current_task['filename']) . '</p>';
+    echo '<p>开始时间: ' . htmlspecialchars($current_task['start_time']) . '</p>';
+} else {
     // 扫描vodoss目录获取视频文件
     $video_files = [];
     $dir = opendir(UPLOAD_DIR);
@@ -47,10 +58,6 @@ if (empty($current_task)) {
     } else {
         echo '<div class="info">vodoss目录中没有找到视频文件</div>';
     }
-} else {
-    echo '<div class="info">自动转码中，请不要离开当前页面！</div>';
-    echo '<p>正在转码: ' . htmlspecialchars($current_task['filename']) . '</p>';
-    echo '<p>开始时间: ' . htmlspecialchars($current_task['start_time']) . '</p>';
 }
 ?>
 <!DOCTYPE html>
@@ -117,49 +124,32 @@ if (empty($current_task)) {
         <p>当前时间: <?php echo date('Y-m-d H:i:s'); ?></p>
     </div>
     
-    <script>
-    const REFRESH_INTERVAL = 8000;
-    const TIMEOUT_THRESHOLD = 3000;
+    <div class="card">
+        <h2>转码记录</h2>
+        <?php if (!empty($transcode_records)): ?>
+            <table style="width:100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background-color: #f5f5f5;">
+                        <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">文件名</th>
+                        <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">转码时间</th>
+                        <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach (array_reverse($transcode_records) as $record): ?>
+                        <tr>
+                            <td style="padding: 10px; border-bottom: 1px solid #eee;"><?php echo htmlspecialchars($record['filename'] ?? ''); ?></td>
+                            <td style="padding: 10px; border-bottom: 1px solid #eee;"><?php echo htmlspecialchars($record['end_time'] ?? ''); ?></td>
+                            <td style="padding: 10px; border-bottom: 1px solid #eee;"><?php echo !empty($record['end_time']) ? '已完成' : '转码中'; ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php else: ?>
+            <p>暂无转码记录</p>
+        <?php endif; ?>
+    </div>
     
-    let refreshTimer = null;
-    let timeoutTimer = null;
-    
-    function autoRefresh() {
-        if (timeoutTimer) {
-            clearTimeout(timeoutTimer);
-            timeoutTimer = null;
-        }
-        
-        timeoutTimer = setTimeout(function() {
-            console.warn('刷新可能卡住，8秒后重新尝试');
-            setTimeout(autoRefresh, REFRESH_INTERVAL);
-        }, TIMEOUT_THRESHOLD);
-        
-        try {
-            const url = window.location.href.split('?')[0] + '?t=' + new Date().getTime();
-            window.location.href = url;
-        } catch (e) {
-            console.error('刷新执行失败:', e);
-            setTimeout(autoRefresh, REFRESH_INTERVAL);
-        }
-    }
-    
-    function initRefresh() {
-        if (refreshTimer) {
-            clearTimeout(refreshTimer);
-        }
-        refreshTimer = setTimeout(autoRefresh, REFRESH_INTERVAL);
-    }
-    
-    window.onload = function() {
-        console.log('页面加载完成，设置8秒自动刷新');
-        initRefresh();
-    };
-    
-    window.onbeforeunload = function() {
-        if (refreshTimer) clearTimeout(refreshTimer);
-        if (timeoutTimer) clearTimeout(timeoutTimer);
-    };
-    </script>
+
 </body>
 </html>
