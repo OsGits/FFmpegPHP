@@ -111,10 +111,7 @@ $has_update = ($latest_version && version_compare(str_replace('V', '', $latest_v
     <div class="card">
         <h2>版本信息</h2>
         <div>
-            <strong>本地版本:</strong> <?php echo htmlspecialchars($local_version); ?>
-            <?php if (!empty($version_info['release_date'])): ?>
-                <span style="color: #666;"> (发布于 <?php echo htmlspecialchars($version_info['release_date']); ?>)</span>
-            <?php endif; ?><br>
+            <strong>本地版本:</strong> <?php echo htmlspecialchars($local_version); ?><br>
             <strong>最新版本:</strong> <?php echo $latest_version ? htmlspecialchars($latest_version) : '获取失败'; ?>
             <?php if ($has_update): ?>
                 <span style="color: red; font-weight: bold;"> [有更新]</span>

@@ -479,17 +479,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <?php else: ?>
             <div class="version-info">
                 <p><strong>当前版本:</strong> <?php echo htmlspecialchars($version_info['version'] ?? 'Unknown'); ?></p>
-                <p><strong>发布时间:</strong> <?php echo htmlspecialchars($version_info['release_date'] ?? '-'); ?></p>
                 <?php if (!empty($version_info['github_api'])): ?>
                     <?php 
                     $release = get_github_release_info($version_info['github_api']);
                     if ($release): 
                     ?>
                         <p><strong>最新版本:</strong> <?php echo htmlspecialchars($release['tag_name'] ?? '-'); ?></p>
-                        <p><strong>更新说明:</strong></p>
-                        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px;">
-                            <?php echo nl2br(htmlspecialchars($release['body'] ?? '无详细说明')); ?>
-                        </div>
                     <?php endif; ?>
                 <?php endif; ?>
             </div>
@@ -505,32 +500,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     <?php echo implode('<br>', array_map('htmlspecialchars', $perm_errors)); ?>
                     <br><br>
                     <strong>解决方案：</strong>
-                    <ul style="margin: 10px 0 0 20px;">
-                        <li>确保 <code>data/</code> 目录及其子目录可写</li>
-                        <li>通过 SSH 或 FTP 创建 <code>data/backup/</code> 目录</li>
-                        <li>设置目录权限: <code>chmod 755 data/backup/</code></li>
-                    </ul>
+                    <p style="margin: 10px 0;">在线更新需要给网站根目录设置 <strong>777</strong> 权限，请通过 SSH 执行以下命令：</p>
+                    <pre style="background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto;">chmod -R 777 /www/wwwroot/你的网站目录</pre>
+                    <p style="margin-top: 10px; color: #666;">或者通过宝塔面板 / FTP 工具手动设置权限。</p>
                 </div>
             <?php endif; ?>
             
+            <?php if ($can_update): ?>
             <div class="warning">
                 <strong>更新须知：</strong>
                 <ul style="margin: 10px 0 0 20px;">
-                    <li>更新前系统会自动创建备份到 <code>data/backup/</code> 目录</li>
-                    <li>配置文件 (<code>data/config.php</code>) 不会被覆盖</li>
-                    <li>转码记录 (<code>data/ting.json</code>) 不会被覆盖</li>
-                    <li>用户数据 (<code>vodoss/</code>, <code>m3u8/</code>) 不会被影响</li>
-                </ul>
-                <br>
-                <strong>权限要求：</strong>
-                <ul style="margin: 10px 0 0 20px;">
-                    <li><code>data/</code> 目录必须可写</li>
-                    <li>主要 PHP 文件必须可写</li>
-                    <li>如果权限不足，请手动创建 <code>data/backup/</code> 目录并设置 755 权限</li>
+                    <li>更新前需要想对全文件夹和文件设置 <strong>WWW用户777权限</strong> 来确保更新过程中的写入操作。</li>
+                    <li>更新前系统会自动创建备份</li>
+                    <li>配置文件和用户数据不会被影响</li>
                 </ul>
             </div>
             
-            <?php if ($can_update): ?>
             <form method="post" id="updateForm">
                 <input type="hidden" name="action" value="update">
                 <a href="index.php" class="btn btn-back">返回</a>
