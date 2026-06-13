@@ -1,5 +1,7 @@
 # FFmpegPHP
 
+[中文版](README.md) | [English](us.README.md)
+
 FFmpegPHP 是一个基于 PHP + FFmpeg 构建的视频转码切片系统，专门用于将本地视频文件转换为 HLS (HTTP Live Streaming) 流媒体格式。
 
 **更新日志**: [查看完整更新记录](https://github.com/OsGits/FFmpegPHP/tree/main/UpgradeLog)
@@ -16,6 +18,7 @@ FFmpegPHP 是一个基于 PHP + FFmpeg 构建的视频转码切片系统，专�
 - **多画质输出**：支持原始画质、1080p、720p 等多种分辨率
 - **数据库集成**：可选集成 MySQL 存储视频元数据
 - **批量处理**：支持批量转码多个视频文件
+- **自动任务管理**：支持自动管理转码任务，避免手动操作
 
 ## 快速开始
 
@@ -55,15 +58,14 @@ FFmpegPHP 是一个基于 PHP + FFmpeg 构建的视频转码切片系统，专�
    git clone https://github.com/OsGits/FFmpegPHP.git
    ```
 2. **配置目录权限**
-   - `vodoss/` - 待转码目录（需可写）
-   - `m3u8/` - 输出目录（需可写）
-   - `data/` - 配置目录（需可写）
+   - 建议全部目录(全局目录与文件),都是设置 `www`用户,的 `777` 可写权限。
+
 3. **访问安装向导**
    ```
    http://your-domain/install.php
    ```
 4. **上传视频**
-   - 将视频文件放入 `vodoss/` 目录
+   - 将视频文件放入 `vodoss/` 目录(后期可在设置页面修改)
    - 登录转码页面开始处理
 
 ## 使用流程
