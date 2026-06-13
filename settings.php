@@ -268,11 +268,10 @@ $ffprobe_status = test_ffprobe_path($current_ffprobe_path) ? '可用' : '不可�
             (<?php echo htmlspecialchars($config_file); ?>)
         </div>
         
-        <?php if (!$root_writable || !$data_writable): ?>
+        <?php if (!$data_writable): ?>
         <div style="padding: 10px; background: #fff3cd; border-radius: 4px; margin-bottom: 10px;">
             <strong>目录权限提示：</strong>
             <ul style="margin-top: 5px; margin-left: 20px;">
-                <li>根目录 (<?php echo htmlspecialchars($root_dir); ?>): <?php echo $root_writable ? '可写' : '不可写'; ?></li>
                 <li>data目录 (<?php echo htmlspecialchars($data_dir); ?>): <?php echo $data_writable ? '可写' : ($data_dir_exists ? '不可写' : '不存在'); ?></li>
             </ul>
         </div>
