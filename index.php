@@ -13,6 +13,20 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . DS . 'includes/functions.php';
 require_once __DIR__ . DS . 'includes/hardware_detection.php';
 
+// 加载密码验证模块
+require_once __DIR__ . DS . 'includes/auth.php';
+
+// 处理认证错误
+$auth_error = isset($_GET['auth_error']) ? '<div class="error">密码错误，请重试</div>' : '';
+
+// 处理认证动作
+if (isset($_GET['action'])) {
+    handle_auth_action($_GET['action']);
+}
+
+// 需要认证
+require_auth();
+
 // 检测系统硬件信息
 $system_info = detect_system();
 $gpu_info = $system_info['gpu'];
@@ -44,7 +58,7 @@ function get_github_latest_version($api_url) {
             ]
         ]
     ]);
-    
+
     $response = @file_get_contents($api_url, false, $context);
     if ($response) {
         $data = json_decode($response, true);
@@ -61,79 +75,98 @@ $has_update = ($latest_version && version_compare(str_replace('V', '', $latest_v
 
 <?php include __DIR__ . '/includes/header.php'; ?>
 
+    <?php echo $auth_error; ?>
+
     <!-- 系统状态 -->
     <div class="card">
         <h2>系统状态</h2>
-        <div>
-            <strong>FFmpeg状态:</strong> 
+        <div class="status-item">
+            <span class="status-label">FFmpeg状态:</span>
             <?php if ($ffmpeg_available): ?>
-                <span style="color: green;">已安装</span>
+                <span class="status-success"><span class="status-dot status-success"></span>已安装</span>
             <?php else: ?>
-                <span style="color: red;">未安装</span>
+                <span class="status-error"><span class="status-dot status-error"></span>未安装</span>
                 <p class="error">FFmpeg未安装，无法进行视频处理。请先安装FFmpeg并添加到系统PATH。</p>
             <?php endif; ?>
         </div>
-        <div>
-            <strong>GPU状态:</strong> 
+        <div class="status-item">
+            <span class="status-label">GPU状态:</span>
             <?php if ($gpu_info['available']): ?>
-                <span style="color: green;">已检测到</span>
-                <p style="color: green;">GPU型号: <?php echo $gpu_info['model']; ?></p>
-                <p style="color: green;">可用的GPU加速方式: <?php echo implode(', ', $gpu_info['methods']); ?></p>
+                <span class="status-success"><span class="status-dot status-success"></span>已检测到</span>
+                <div class="gpu-info">
+                    <span>GPU型号: <?php echo $gpu_info['model']; ?></span>
+                    <span>可用的GPU加速方式: <?php echo implode(', ', $gpu_info['methods']); ?></span>
+                </div>
             <?php else: ?>
-                <span style="color: red;">未检测到</span>
-                <p style="color: red;">未检测到可用的GPU加速，只能使用CPU转码</p>
+                <span class="status-warning"><span class="status-dot status-warning"></span>未检测到</span>
+                <p class="warning">未检测到可用的GPU加速，只能使用CPU转码</p>
             <?php endif; ?>
         </div>
-        <div>
-            <strong>待转码目录:</strong> <?php echo UPLOAD_DIR; ?> (<?php echo is_writable(UPLOAD_DIR) ? '可写' : '不可写'; ?>)
+        <div class="status-item">
+            <span class="status-label">待转码目录:</span>
+            <span><?php echo UPLOAD_DIR; ?></span>
+            <span class="badge <?php echo is_writable(UPLOAD_DIR) ? 'badge-success' : 'badge-danger'; ?>"><?php echo is_writable(UPLOAD_DIR) ? '可写' : '不可写'; ?></span>
         </div>
-        <div>
-            <strong>转码后保存目录:</strong> <?php echo OUTPUT_DIR; ?> (<?php echo is_writable(OUTPUT_DIR) ? '可写' : '不可写'; ?>)
+        <div class="status-item">
+            <span class="status-label">转码后保存目录:</span>
+            <span><?php echo OUTPUT_DIR; ?></span>
+            <span class="badge <?php echo is_writable(OUTPUT_DIR) ? 'badge-success' : 'badge-danger'; ?>"><?php echo is_writable(OUTPUT_DIR) ? '可写' : '不可写'; ?></span>
         </div>
-        <div>
-            <strong>TS文件路径设置:</strong> <?php echo htmlspecialchars($base_url); ?>
+        <div class="status-item">
+            <span class="status-label">TS文件路径设置:</span>
+            <span><?php echo htmlspecialchars($base_url); ?></span>
         </div>
-        <div>
-            <strong>切片时长:</strong> <?php echo $default_segment_duration; ?> 秒
+        <div class="status-item">
+            <span class="status-label">切片时长:</span>
+            <span><?php echo $default_segment_duration; ?> 秒</span>
         </div>
-        <div>
-            <strong>截图时间点:</strong> <?php echo $default_screenshot_time; ?> 秒
+        <div class="status-item">
+            <span class="status-label">截图时间点:</span>
+            <span><?php echo $default_screenshot_time; ?> 秒</span>
         </div>
-        <div>
-            <strong>画质选择:</strong> <?php echo $default_quality; ?>
+        <div class="status-item">
+            <span class="status-label">画质选择:</span>
+            <span><?php echo $default_quality; ?></span>
         </div>
-        <div>
-            <strong>使用GPU加速:</strong> <?php echo ($default_use_gpu == 1 && $gpu_info['available']) ? '是' : '否'; ?>
+        <div class="status-item">
+            <span class="status-label">使用GPU加速:</span>
+            <span><?php echo ($default_use_gpu == 1 && $gpu_info['available']) ? '是' : '否'; ?></span>
         </div>
     </div>
 
     <!-- 版本信息 -->
     <div class="card">
         <h2>版本信息</h2>
-        <div>
-            <strong>本地版本:</strong> <?php echo htmlspecialchars($local_version); ?><br>
-            <strong>最新版本:</strong> <?php echo $latest_version ? htmlspecialchars($latest_version) : '获取失败'; ?>
+        <div class="version-info">
+            <div class="version-row">
+                <span class="status-label">本地版本:</span>
+                <span><?php echo htmlspecialchars($local_version); ?></span>
+            </div>
+            <div class="version-row">
+                <span class="status-label">最新版本:</span>
+                <span><?php echo $latest_version ? htmlspecialchars($latest_version) : '获取失败'; ?></span>
+                <?php if ($has_update): ?>
+                    <span class="badge badge-danger">有更新</span>
+                <?php elseif ($latest_version): ?>
+                    <span class="badge badge-success">已是最新</span>
+                <?php endif; ?>
+            </div>
             <?php if ($has_update): ?>
-                <span style="color: red; font-weight: bold;"> [有更新]</span>
-            <?php elseif ($latest_version): ?>
-                <span style="color: green;"> [已是最新]</span>
-            <?php endif; ?><br>
-            <?php if ($has_update): ?>
-                <div style="margin-top: 10px;">
-                    <a href="update.php" class="btn" style="background: #4CAF50; color: white; padding: 8px 15px; border-radius: 4px; text-decoration: none; font-size: 14px; margin-right: 10px;">在线更新</a>
-                    <a href="<?php echo htmlspecialchars($version_info['download_url']); ?>" target="_blank" style="background: #666; color: white; padding: 8px 15px; border-radius: 4px; text-decoration: none; font-size: 14px;">离线下载</a>
+                <div class="update-actions">
+                    <a href="update.php" class="btn btn-success">在线更新</a>
+                    <a href="<?php echo htmlspecialchars($version_info['download_url']); ?>" target="_blank" class="btn btn-secondary">离线下载</a>
                 </div>
             <?php endif; ?>
         </div>
-        <div style="margin-top: 10px; color: #666;">
-            更新日志：<a href="<?php echo htmlspecialchars($version_info['changelog_url']); ?>" target="_blank" style="color: #0366d6;">查看更新记录</a>
+        <div class="changelog-link">
+            <a href="<?php echo htmlspecialchars($version_info['changelog_url']); ?>" target="_blank">查看更新记录</a>
         </div>
     </div>
 
     <!-- 使用说明 -->
     <div class="card">
         <h2>使用说明</h2>
-        <div>
+        <div class="guide-section">
             <h3>功能介绍</h3>
             <ul>
                 <li><strong>首页:</strong> 显示系统状态、版本号和使用说明</li>
@@ -141,6 +174,8 @@ $has_update = ($latest_version && version_compare(str_replace('V', '', $latest_v
                 <li><strong>记录:</strong> 显示当前转码进度和已完成的转码记录</li>
                 <li><strong>设置:</strong> 配置转码选项，包括GPU/CPU选择和目录设置</li>
             </ul>
+        </div>
+        <div class="guide-section">
             <h3>使用步骤</h3>
             <ol>
                 <li>确保FFmpeg已正确安装并配置</li>
@@ -151,5 +186,150 @@ $has_update = ($latest_version && version_compare(str_replace('V', '', $latest_v
             </ol>
         </div>
     </div>
+
+<style>
+    /* 首页专用样式 */
+    .status-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border-light);
+        flex-wrap: wrap;
+    }
+
+    .status-item:last-child {
+        border-bottom: none;
+    }
+
+    .status-label {
+        font-weight: 600;
+        min-width: 120px;
+        color: var(--text-secondary);
+    }
+
+    .status-success {
+        color: #059669;
+        font-weight: 600;
+        background-color: #d1fae5;
+        padding: 2px 10px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .status-error {
+        color: #dc2626;
+        font-weight: 600;
+        background-color: #fee2e2;
+        padding: 2px 10px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .status-warning {
+        color: #d97706;
+        font-weight: 600;
+        background-color: #fef3c7;
+        padding: 2px 10px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .gpu-info {
+        width: 100%;
+        padding-left: 130px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .badge-success {
+        background-color: #ECFDF5;
+        color: var(--success-dark);
+    }
+
+    .badge-danger {
+        background-color: #FEF2F2;
+        color: var(--danger-dark);
+    }
+
+    .badge-warning {
+        background-color: #FFFBEB;
+        color: var(--warning-dark);
+    }
+
+    .version-info {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .version-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .update-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 12px;
+    }
+
+    .changelog-link {
+        margin-top: 16px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border-light);
+    }
+
+    .guide-section {
+        margin-bottom: 20px;
+    }
+
+    .guide-section:last-child {
+        margin-bottom: 0;
+    }
+
+    @media (max-width: 768px) {
+        .status-item {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .status-label {
+            min-width: auto;
+        }
+
+        .gpu-info {
+            padding-left: 0;
+        }
+
+        .update-actions {
+            flex-direction: column;
+        }
+
+        .update-actions .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>

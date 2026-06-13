@@ -13,6 +13,48 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . DS . 'includes/functions.php';
 require_once __DIR__ . DS . 'includes/hardware_detection.php';
 
+// 加载密码验证模块
+require_once __DIR__ . DS . 'includes/auth.php';
+
+// 处理认证动作
+if (isset($_GET['action'])) {
+    handle_auth_action($_GET['action']);
+}
+
+// 需要认证
+require_auth();
+
+// 处理密码修改请求
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['current_password'])) {
+    $password_result = handle_password_change();
+    if (strpos($password_result, 'error') === false && strpos($password_result, 'success') === false) {
+        // 没有错误或成功消息，说明是重定向
+    } else {
+        $password_message = $password_result;
+    }
+}
+
+// 检查URL中的密码消息参数
+if (isset($_GET['password_msg'])) {
+    switch ($_GET['password_msg']) {
+        case 'success':
+            $password_message = '<div class="success">密码修改成功，请使用新密码重新登录！</div>';
+            break;
+        case 'error_current':
+            $password_message = '<div class="error">当前密码错误</div>';
+            break;
+        case 'error_length':
+            $password_message = '<div class="error">新密码长度至少4位</div>';
+            break;
+        case 'error_mismatch':
+            $password_message = '<div class="error">两次输入的密码不一致</div>';
+            break;
+        case 'error_save':
+            $password_message = '<div class="error">密码修改失败，请检查目录权限</div>';
+            break;
+    }
+}
+
 // 检测系统硬件信息
 $system_info = detect_system();
 $gpu_info = $system_info['gpu'];
@@ -31,12 +73,11 @@ function get_config_format($config_file) {
 // 读取现有配置
 function read_config() {
     global $config_file;
-    global $config; // 使用 config.php 中已加载的配置
+    global $config;
     $config_format = get_config_format($config_file);
-    
+
     if (file_exists($config_file)) {
         if ($config_format === 'php') {
-            // 读取 PHP 配置
             $saved_config = [];
             @include $config_file;
             if (isset($saved_config) && is_array($saved_config)) {
@@ -44,13 +85,11 @@ function read_config() {
             }
             return [];
         } else {
-            // 读取 JSON 配置
             $content = @file_get_contents($config_file);
             $loaded = json_decode($content, true) ?? [];
             return $loaded;
         }
     }
-    // 如果没有配置文件，返回已加载的默认配置
     return $config ?? [];
 }
 
@@ -58,21 +97,19 @@ function read_config() {
 function save_config($config) {
     global $config_file;
     $config_format = get_config_format($config_file);
-    
-    // 检查目录是否可写
+
     $dir = dirname($config_file);
     if (!is_dir($dir)) {
         @mkdir($dir, 0755, true);
     }
-    
+
     if (!is_writable($dir)) {
         return false;
     }
-    
+
     $result = false;
-    
+
     if ($config_format === 'php') {
-        // 保存为 PHP 配置
         $php_content = '<?php
 /**
  * 配置文件 - PHP 格式
@@ -85,22 +122,18 @@ $saved_config = ' . var_export($config, true) . ';
 ';
         $result = @file_put_contents($config_file, $php_content);
     } else {
-        // 保存为 JSON 配置
         $content = json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         $result = @file_put_contents($config_file, $content);
     }
-    
+
     return $result !== false;
 }
 
 // 处理POST请求
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // 读取当前配置
     $config = read_config();
-    
-    // 检查是否是基础设置表单提交
+
     if (isset($_POST['ffmpeg_path']) || isset($_POST['input_dir']) || isset($_POST['output_dir']) || isset($_POST['base_url']) || isset($_POST['segment_duration']) || isset($_POST['screenshot_time']) || isset($_POST['quality']) || isset($_POST['use_gpu'])) {
-        // 基础设置
         if (isset($_POST['ffmpeg_path'])) {
             $config['ffmpeg_path'] = $_POST['ffmpeg_path'] ?? 'ffmpeg';
         }
@@ -128,14 +161,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['quality'])) {
             $config['quality'] = $_POST['quality'] ?? '1080p';
         }
-        // 无论是否勾选，都更新use_gpu配置（只有在基础设置表单提交时）
         $config['use_gpu'] = isset($_POST['use_gpu']) ? 1 : 0;
     }
-    
-    // 检查是否是数据库设置表单提交
+
     if (isset($_POST['mysql_host']) || isset($_POST['mysql_port']) || isset($_POST['mysql_db']) || isset($_POST['mysql_user']) || isset($_POST['mysql_password']) || isset($_POST['m3u8_full_url']) || isset($_POST['mysql_enabled'])) {
-        // MySQL设置
-        // 无论是否勾选，都更新mysql_enabled配置（只有在数据库设置表单提交时）
         $config['mysql_enabled'] = isset($_POST['mysql_enabled']) ? 1 : 0;
         if (isset($_POST['mysql_host'])) {
             $config['mysql_host'] = $_POST['mysql_host'] ?? 'localhost';
@@ -156,11 +185,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $config['m3u8_full_url'] = $_POST['m3u8_full_url'] ?? '';
         }
     }
-    
-    // 保存配置
+
     $dir = dirname($config_file);
     $dir_writable = is_writable($dir);
-    
+
     if (save_config($config)) {
         $message = '<div class="success">设置保存成功</div>';
     } else {
@@ -193,7 +221,7 @@ $current_mysql_user = $current_config['mysql_user'] ?? 'root';
 $current_mysql_password = $current_config['mysql_password'] ?? '';
 $current_m3u8_full_url = $current_config['m3u8_full_url'] ?? '';
 
-// 检查函数是否被禁用（本地副本）
+// 检查函数是否被禁用
 function is_func_disabled($func_name) {
     $disabled = explode(',', ini_get('disable_functions'));
     $disabled = array_map('trim', $disabled);
@@ -245,33 +273,28 @@ $ffprobe_status = test_ffprobe_path($current_ffprobe_path) ? '可用' : '不可�
         $config_dir = dirname($config_file);
         $is_writable = is_writable($config_dir);
         $config_exists = file_exists($config_file);
-        
-        // 检查根目录和 data 目录的情况
+
         $root_dir = __DIR__;
         $root_writable = is_writable($root_dir);
         $data_dir = __DIR__ . DS . 'data';
         $data_dir_exists = is_dir($data_dir);
         $data_writable = $data_dir_exists && is_writable($data_dir);
         ?>
-        <div style="padding: 10px; background: <?php echo $is_writable ? '#d4edda' : '#f8d7da'; ?>; border-radius: 4px; margin-bottom: 10px;">
-            <strong>配置目录状态：</strong>
-            <span style="color: <?php echo $is_writable ? '#155724' : '#721c24'; ?>;">
-                <?php echo $is_writable ? '可写入' : '不可写入'; ?>
-            </span>
-            (<?php echo htmlspecialchars($config_dir); ?>)
+        <div class="status-row <?php echo $is_writable ? 'status-success' : 'status-error'; ?>">
+            <span class="status-label">配置目录状态：</span>
+            <span><?php echo $is_writable ? '可写入' : '不可写入'; ?></span>
+            <code><?php echo htmlspecialchars($config_dir); ?></code>
         </div>
-        <div style="padding: 10px; background: <?php echo $config_exists ? '#d1ecf1' : '#fff3cd'; ?>; border-radius: 4px; margin-bottom: 10px;">
-            <strong>配置文件状态：</strong>
-            <span style="color: <?php echo $config_exists ? '#0c5460' : '#856404'; ?>;">
-                <?php echo $config_exists ? '已存在' : '不存在'; ?>
-            </span>
-            (<?php echo htmlspecialchars($config_file); ?>)
+        <div class="status-row <?php echo $config_exists ? 'status-info' : 'status-warning'; ?>">
+            <span class="status-label">配置文件状态：</span>
+            <span><?php echo $config_exists ? '已存在' : '不存在'; ?></span>
+            <code><?php echo htmlspecialchars($config_file); ?></code>
         </div>
-        
+
         <?php if (!$data_writable): ?>
-        <div style="padding: 10px; background: #fff3cd; border-radius: 4px; margin-bottom: 10px;">
+        <div class="warning">
             <strong>目录权限提示：</strong>
-            <ul style="margin-top: 5px; margin-left: 20px;">
+            <ul class="warning-list">
                 <li>data目录 (<?php echo htmlspecialchars($data_dir); ?>): <?php echo $data_writable ? '可写' : ($data_dir_exists ? '不可写' : '不存在'); ?></li>
             </ul>
         </div>
@@ -282,6 +305,7 @@ $ffprobe_status = test_ffprobe_path($current_ffprobe_path) ? '可用' : '不可�
     <div class="tab-navigation">
         <button class="tab-button active" onclick="openTab(event, 'basic-settings')">基础设置</button>
         <button class="tab-button" onclick="openTab(event, 'database-settings')">数据库</button>
+        <button class="tab-button" onclick="openTab(event, 'password-settings')">修改密码</button>
     </div>
 
     <!-- 基础设置选项卡 -->
@@ -289,57 +313,55 @@ $ffprobe_status = test_ffprobe_path($current_ffprobe_path) ? '可用' : '不可�
         <div class="card">
             <h2>基础设置</h2>
             <?php echo $message ?? ''; ?>
-            
+
             <form method="post">
             <div class="form-group">
-                <label for="ffmpeg_path">FFmpeg路径</label>
+                <label for="ffmpeg_path">FFmpeg路径(必填)</label>
                 <input type="text" id="ffmpeg_path" name="ffmpeg_path" value="<?php echo htmlspecialchars($current_ffmpeg_path); ?>" placeholder="例如: C:/ffmpeg/bin/ffmpeg.exe">
                 <small>如果已添加到系统PATH，可直接使用 'ffmpeg'</small>
                 <small>这里是ffmpeg程序路径，不是目录路径，需要包含ffmpeg.exe文件</small>
-                <small>状态: <span style="color: <?php echo $ffmpeg_status === '可用' ? 'green' : 'red'; ?>;"><?php echo $ffmpeg_status; ?></span></small>
+                <small>状态: <span class="status-<?php echo $ffmpeg_status === '可用' ? 'success' : 'error'; ?>"><?php echo $ffmpeg_status; ?></span></small>
             </div>
-            
+
             <div class="form-group">
-                <label for="ffprobe_path">FFprobe路径</label>
+                <label for="ffprobe_path">FFprobe路径(必填)</label>
                 <input type="text" id="ffprobe_path" name="ffprobe_path" value="<?php echo htmlspecialchars($current_ffprobe_path); ?>" placeholder="例如: C:/ffmpeg/bin/ffprobe.exe">
                 <small>如果已添加到系统PATH，可直接使用 'ffprobe'</small>
-                <small>用于获取视频信息，可选但推荐配置</small>
-                <small>状态: <span style="color: <?php echo $ffprobe_status === '可用' ? 'green' : 'red'; ?>;"><?php echo $ffprobe_status; ?></span></small>
+                <small>用于获取视频信息，可选但推荐配置,一般情况与FFmpeg路径相同</small>
+                <small>状态: <span class="status-<?php echo $ffprobe_status === '可用' ? 'success' : 'error'; ?>"><?php echo $ffprobe_status; ?></span></small>
             </div>
-            
 
-            
             <div class="form-group">
-                <label for="input_dir">待转码目录</label>
+                <label for="input_dir">待转码目录(必填)</label>
                 <input type="text" id="input_dir" name="input_dir" value="<?php echo htmlspecialchars($current_input_dir); ?>" placeholder="./vodoss/">
                 <small>默认为 ./vodoss/，表示根目录下的vodoss文件夹</small>
             </div>
-            
+
             <div class="form-group">
-                <label for="output_dir">转码后保存目录</label>
+                <label for="output_dir">转码后保存目录(必填)</label>
                 <input type="text" id="output_dir" name="output_dir" value="<?php echo htmlspecialchars($current_output_dir); ?>" placeholder="./m3u8/">
                 <small>默认为 ./m3u8/，表示转码后保存的文件目录</small>
             </div>
-            
+
             <div class="form-group">
-                <label for="base_url">TS文件路径设置</label>
-                <input type="text" id="base_url" name="base_url" value="<?php echo htmlspecialchars($current_base_url); ?>" placeholder="例如: http://your-domain/output/ 结尾加‘/’">
+                <label for="base_url">TS文件路径设置(必填)</label>
+                <input type="text" id="base_url" name="base_url" value="<?php echo htmlspecialchars($current_base_url); ?>" placeholder="例如: http://your-domain/output/ 结尾加'/'">
                 <small>TS文件的基础访问地址，会添加到m3u8文件中的每个TS文件路径前！</small>
-                <small>最终在m3u8文件中合成的路径为：http(s)://TS文件基础地址/转码后保存目录/视频文件名/index.m3u8</small>
+                <small>最终在m3u8文件中合成的路径为：http(s)://TS文件基础地址/转码后保存目录/m3u8/视频文件名/index.m3u8</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="segment_duration">切片时长 (秒)</label>
                 <input type="number" id="segment_duration" name="segment_duration" value="<?php echo $current_segment_duration; ?>" min="1" max="60">
                 <small>每个TS切片的时长，默认为10秒</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="screenshot_time">截图时间点 (秒)</label>
                 <input type="number" id="screenshot_time" name="screenshot_time" value="<?php echo $current_screenshot_time; ?>" min="0">
                 <small>视频截图的时间点，默认为10秒</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="quality">画质选择</label>
                 <select id="quality" name="quality">
@@ -348,48 +370,50 @@ $ffprobe_status = test_ffprobe_path($current_ffprobe_path) ? '可用' : '不可�
                     <option value="720p" <?php echo $current_quality === '720p' ? 'selected' : ''; ?>>720P</option>
                 </select>
                 <small>选择转码后的视频画质</small>
-                <div style="margin-top: 8px; padding: 10px; background-color: #e8f4f8; border-radius: 4px;">
-                    <strong>💡 提示：</strong>
-                    <ul style="margin: 5px 0 0 20px; padding: 0;">
+                <div class="tip-box">
+                    <strong>提示：</strong>
+                    <ul class="tip-list">
                         <li><strong>原画质</strong>：直接复制视频流不重新编码，处理速度极快，画质无损失</li>
                         <li><strong>1080P/720P</strong>：重新编码到指定画质，兼容性更好，但处理速度较慢</li>
                     </ul>
                 </div>
             </div>
-            
+
             <div class="form-group">
-                <label for="use_gpu">使用GPU加速</label>
-                <div style="display: flex; align-items: center; gap: 10px;">
+                <label for="use_gpu">使用GPU加速(可选)</label>
+                <div class="checkbox-row">
                     <input type="checkbox" id="use_gpu" name="use_gpu" value="1" <?php echo $current_use_gpu == 1 ? 'checked' : ''; ?> <?php echo !$gpu_info['available'] ? 'disabled' : ''; ?>>
-                    <label for="use_gpu" style="color: <?php echo $gpu_info['available'] ? 'green' : 'red'; ?>">
+                    <label for="use_gpu" class="status-<?php echo $gpu_info['available'] ? 'success' : 'error'; ?>">
                         <?php echo $gpu_info['available'] ? '使用GPU加速' : '未检测到GPU，无法使用GPU加速'; ?>
                     </label>
                 </div>
                 <small><?php echo $gpu_info['available'] ? '勾选后使用GPU加速转码' : '未检测到GPU，只能使用CPU'; ?></small>
             </div>
-            
+
             <div class="form-group">
                 <label>当前状态</label>
-                <div><?php echo 'FFmpeg路径: ' . htmlspecialchars($current_ffmpeg_path); ?></div>
-                <div><?php echo '状态: <span style="color: ' . ($ffmpeg_status === '可用' ? 'green' : 'red') . '">' . $ffmpeg_status . '</span>'; ?></div>
-                <div><?php echo '待转码目录: ' . htmlspecialchars($current_input_dir); ?></div>
-                <div><?php echo '转码后目录: ' . htmlspecialchars($current_output_dir); ?></div>
-                <div><?php echo '基础地址: ' . htmlspecialchars($current_base_url); ?></div>
-                <div><?php echo '切片时长: ' . $current_segment_duration . ' 秒'; ?></div>
-                <div><?php echo '截图时间点: ' . $current_screenshot_time . ' 秒'; ?></div>
-                <div><?php echo '画质选择: ' . $current_quality; ?></div>
-                <div><?php echo '使用GPU加速: ' . ($current_use_gpu == 1 ? '是' : '否'); ?></div>
+                <div class="status-summary">
+                    <div><span>FFmpeg路径:</span> <code><?php echo htmlspecialchars($current_ffmpeg_path); ?></code></div>
+                    <div><span>状态:</span> <span class="status-<?php echo $ffmpeg_status === '可用' ? 'success' : 'error'; ?>"><?php echo $ffmpeg_status; ?></span></div>
+                    <div><span>待转码目录:</span> <code><?php echo htmlspecialchars($current_input_dir); ?></code></div>
+                    <div><span>转码后目录:</span> <code><?php echo htmlspecialchars($current_output_dir); ?></code></div>
+                    <div><span>基础地址:</span> <code><?php echo htmlspecialchars($current_base_url); ?></code></div>
+                    <div><span>切片时长:</span> <?php echo $current_segment_duration; ?> 秒</div>
+                    <div><span>截图时间点:</span> <?php echo $current_screenshot_time; ?> 秒</div>
+                    <div><span>画质选择:</span> <?php echo $current_quality; ?></div>
+                    <div><span>使用GPU加速:</span> <?php echo ($current_use_gpu == 1 ? '是' : '否'); ?></div>
+                </div>
             </div>
-            
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <input type="submit" value="保存设置" style="width: auto; padding: 8px 16px;">
+
+            <div class="form-actions">
+                <input type="submit" value="保存设置">
             </div>
             </form>
         </div>
 
         <div class="card">
             <h2>设置说明</h2>
-            <ul>
+            <ul class="info-list">
                 <li><strong>FFmpeg路径</strong>：如果FFmpeg已添加到系统PATH，可直接使用 'ffmpeg'；否则需要指定完整路径，例如 'C:/ffmpeg/bin/ffmpeg.exe'。</li>
                 <li><strong>转码选择</strong>：如果检测到GPU，可以选择使用GPU加速；否则只能使用CPU。</li>
                 <li><strong>待转码目录</strong>：存放需要转码的视频文件的目录，默认为 ./vodoss/。</li>
@@ -397,52 +421,51 @@ $ffprobe_status = test_ffprobe_path($current_ffprobe_path) ? '可用' : '不可�
                 <li><strong>路径格式</strong>：使用相对路径，以 ./ 开头，表示项目根目录。</li>
             </ul>
         </div>
-        
+
         <div class="card">
             <h2>权限问题提示</h2>
             <p>如果设置无法保存，可能是目录无写入权限。您可以：</p>
-            <ol>
+            <ol class="info-list">
                 <li>
                     <strong>修改目录权限：</strong>
                     <p>确保以下目录有写入权限（755或777）：</p>
-                    <ul>
+                    <ul class="info-list">
                         <li>根目录：<?php echo htmlspecialchars(__DIR__); ?></li>
                         <li>或 data 目录：<?php echo htmlspecialchars(__DIR__ . DS . 'data'); ?></li>
                     </ul>
                     <p>在 Linux 系统上，可以执行：</p>
-                    <pre style="background: #f5f5f5; padding: 8px; border-radius: 4px;">chmod 755 <?php echo htmlspecialchars(__DIR__); ?></pre>
+                    <pre class="code-block">chmod 755 <?php echo htmlspecialchars(__DIR__); ?></pre>
                     或者
-                    <pre style="background: #f5f5f5; padding: 8px; border-radius: 4px;">mkdir -p <?php echo htmlspecialchars(__DIR__ . DS . 'data'); ?> && chmod 755 <?php echo htmlspecialchars(__DIR__ . DS . 'data'); ?></pre>
+                    <pre class="code-block">mkdir -p <?php echo htmlspecialchars(__DIR__ . DS . 'data'); ?> && chmod 755 <?php echo htmlspecialchars(__DIR__ . DS . 'data'); ?></pre>
                 </li>
                 <li>
                     <strong>手动修改配置文件：</strong>
                     <p>创建配置文件并填入以下内容：</p>
-                    <p><strong>配置文件位置：</strong><?php echo htmlspecialchars($config_file); ?></p>
+                    <p><strong>配置文件位置：</strong><code><?php echo htmlspecialchars($config_file); ?></code></p>
                     <p><strong>config.php 格式示例：</strong></p>
-                    <pre style="background: #f5f5f5; padding: 10px; border: 1px solid #ddd; border-radius: 4px; overflow-x: auto;">&lt;?php
+                    <pre class="code-block"><?php echo htmlspecialchars('<?php
 /**
  * 配置文件 - PHP 格式
- * 此文件包含敏感信息，请确保 Web 服务器禁止直接访问 .php 文件
  */
 
 $saved_config = [
-    'ffmpeg_path' =&gt; 'ffmpeg',
-    'ffprobe_path' =&gt; 'ffprobe',
-    'input_dir' =&gt; './vodoss/',
-    'output_dir' =&gt; './m3u8/',
-    'base_url' =&gt; '',
-    'segment_duration' =&gt; 10,
-    'screenshot_time' =&gt; 10,
-    'quality' =&gt; 'original',
-    'use_gpu' =&gt; 0,
-    'mysql_enabled' =&gt; 0,
-    'mysql_host' =&gt; 'localhost',
-    'mysql_port' =&gt; '3306',
-    'mysql_db' =&gt; 'vod_system',
-    'mysql_user' =&gt; 'root',
-    'mysql_password' =&gt; '',
-    'm3u8_full_url' =&gt; '',
-];
+    \'ffmpeg_path\' => \'ffmpeg\',
+    \'ffprobe_path\' => \'ffprobe\',
+    \'input_dir\' => \'./vodoss/\',
+    \'output_dir\' => \'./m3u8/\',
+    \'base_url\' => \'\',
+    \'segment_duration\' => 10,
+    \'screenshot_time\' => 10,
+    \'quality\' => \'original\',
+    \'use_gpu\' => 0,
+    \'mysql_enabled\' => 0,
+    \'mysql_host\' => \'localhost\',
+    \'mysql_port\' => \'3306\',
+    \'mysql_db\' => \'vod_system\',
+    \'mysql_user\' => \'root\',
+    \'mysql_password\' => \'\',
+    \'m3u8_full_url\' => \'\',
+];'); ?></pre>
                 </li>
             </ol>
         </div>
@@ -453,70 +476,100 @@ $saved_config = [
         <div class="card">
             <h2>数据库设置</h2>
             <?php echo $message ?? ''; ?>
-            
-            <!-- 测试结果提示区域 -->
-            <div id="test-result" style="margin-bottom: 15px; padding: 10px; border-radius: 4px; display: none;"></div>
-            
+
+            <div id="test-result" class="test-result"></div>
+
             <form method="post">
             <div class="form-group">
                 <label for="mysql_enabled">是否启动数据库</label>
-                <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="checkbox-row">
                     <input type="checkbox" id="mysql_enabled" name="mysql_enabled" value="1" <?php echo $current_mysql_enabled == 1 ? 'checked' : ''; ?>>
                     <label for="mysql_enabled">启用MySQL数据库</label>
                 </div>
                 <small>勾选后启用MySQL数据库功能</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="mysql_host">数据库IP</label>
                 <input type="text" id="mysql_host" name="mysql_host" value="<?php echo htmlspecialchars($current_mysql_host); ?>" placeholder="例如: localhost 或 127.0.0.1">
                 <small>MySQL数据库服务器的IP地址</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="mysql_port">数据库端口</label>
                 <input type="number" id="mysql_port" name="mysql_port" value="<?php echo $current_mysql_port; ?>" min="1" max="65535">
                 <small>MySQL数据库服务器的端口，默认为3306</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="mysql_db">数据库</label>
                 <input type="text" id="mysql_db" name="mysql_db" value="<?php echo htmlspecialchars($current_mysql_db); ?>" placeholder="例如: vod_system">
                 <small>要使用的数据库名称</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="mysql_user">用户账号</label>
                 <input type="text" id="mysql_user" name="mysql_user" value="<?php echo htmlspecialchars($current_mysql_user); ?>" placeholder="例如: root">
                 <small>MySQL数据库的用户名</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="mysql_password">数据库密码</label>
                 <input type="password" id="mysql_password" name="mysql_password" value="<?php echo htmlspecialchars($current_mysql_password); ?>" placeholder="输入数据库密码">
                 <small>MySQL数据库的密码</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="m3u8_full_url">m3u8完整链接</label>
                 <input type="text" id="m3u8_full_url" name="m3u8_full_url" value="<?php echo htmlspecialchars($current_m3u8_full_url); ?>" placeholder="例如: http://your-domain/m3u8/">
                 <small>m3u8文件的完整访问链接</small>
             </div>
-            
+
             <div class="form-group">
                 <label>当前状态</label>
-                <div><?php echo '是否启动数据库: ' . ($current_mysql_enabled == 1 ? '是' : '否'); ?></div>
-                <div><?php echo '数据库IP: ' . htmlspecialchars($current_mysql_host); ?></div>
-                <div><?php echo '数据库端口: ' . $current_mysql_port; ?></div>
-                <div><?php echo '数据库名称: ' . htmlspecialchars($current_mysql_db); ?></div>
-                <div><?php echo '用户名: ' . htmlspecialchars($current_mysql_user); ?></div>
-                <div><?php echo '密码: ' . (empty($current_mysql_password) ? '未设置' : '已设置'); ?></div>
-                <div><?php echo 'm3u8完整链接: ' . htmlspecialchars($current_m3u8_full_url); ?></div>
+                <div class="status-summary">
+                    <div><span>是否启动数据库:</span> <?php echo ($current_mysql_enabled == 1 ? '是' : '否'); ?></div>
+                    <div><span>数据库IP:</span> <code><?php echo htmlspecialchars($current_mysql_host); ?></code></div>
+                    <div><span>数据库端口:</span> <?php echo $current_mysql_port; ?></div>
+                    <div><span>数据库名称:</span> <code><?php echo htmlspecialchars($current_mysql_db); ?></code></div>
+                    <div><span>用户名:</span> <code><?php echo htmlspecialchars($current_mysql_user); ?></code></div>
+                    <div><span>密码:</span> <?php echo (empty($current_mysql_password) ? '未设置' : '已设置'); ?></div>
+                    <div><span>m3u8完整链接:</span> <code><?php echo htmlspecialchars($current_m3u8_full_url); ?></code></div>
+                </div>
             </div>
-            
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <input type="submit" value="保存设置" style="width: auto; padding: 8px 16px;">
-                <button type="button" onclick="testDatabaseConnection()" style="padding: 8px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">测试连接</button>
+
+            <div class="form-actions">
+                <input type="submit" value="保存设置">
+                <button type="button" onclick="testDatabaseConnection()" class="btn btn-success">测试连接</button>
+            </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 密码修改选项卡 -->
+    <div id="password-settings" class="tab-content">
+        <div class="card">
+            <h2>修改访问密码</h2>
+            <?php echo $password_message ?? ''; ?>
+
+            <form method="post" action="settings.php?action=change_password">
+            <div class="form-group">
+                <label for="current_password">当前密码</label>
+                <input type="password" id="current_password" name="current_password" placeholder="请输入当前密码" required>
+            </div>
+
+            <div class="form-group">
+                <label for="new_password">新密码</label>
+                <input type="password" id="new_password" name="new_password" placeholder="请输入新密码（至少4位）" required minlength="4">
+            </div>
+
+            <div class="form-group">
+                <label for="confirm_new_password">确认新密码</label>
+                <input type="password" id="confirm_new_password" name="confirm_new_password" placeholder="请再次输入新密码" required minlength="4">
+            </div>
+
+            <div class="form-actions">
+                <input type="submit" value="修改密码" class="btn btn-primary">
             </div>
             </form>
         </div>
@@ -525,20 +578,17 @@ $saved_config = [
 <script>
 // 选项卡切换功能
 function openTab(evt, tabName) {
-    // 隐藏所有选项卡内容
     var tabContents = document.getElementsByClassName("tab-content");
     for (var i = 0; i < tabContents.length; i++) {
         tabContents[i].style.display = "none";
         tabContents[i].classList.remove("active");
     }
-    
-    // 移除所有选项卡按钮的活动状态
+
     var tabButtons = document.getElementsByClassName("tab-button");
     for (var i = 0; i < tabButtons.length; i++) {
         tabButtons[i].classList.remove("active");
     }
-    
-    // 显示当前选项卡内容并激活按钮
+
     document.getElementById(tabName).style.display = "block";
     document.getElementById(tabName).classList.add("active");
     evt.currentTarget.classList.add("active");
@@ -546,50 +596,43 @@ function openTab(evt, tabName) {
 
 // 测试数据库连接
 function testDatabaseConnection() {
-    // 获取表单数据
     var mysql_enabled = document.getElementById('mysql_enabled').checked ? 1 : 0;
     var mysql_host = document.getElementById('mysql_host').value;
     var mysql_port = document.getElementById('mysql_port').value;
     var mysql_db = document.getElementById('mysql_db').value;
     var mysql_user = document.getElementById('mysql_user').value;
     var mysql_password = document.getElementById('mysql_password').value;
-    
-    // 简单验证
+
     if (!mysql_enabled) {
         showTestResult('error', '请先启用数据库功能');
         return;
     }
-    
+
     if (!mysql_host || !mysql_port || !mysql_db || !mysql_user) {
         showTestResult('error', '请填写完整的数据库连接信息');
         return;
     }
-    
-    // 显示加载状态
+
     var testButton = event.target;
     var originalText = testButton.innerHTML;
     testButton.innerHTML = '测试中...';
     testButton.disabled = true;
-    
-    // 清空之前的测试结果
+
     document.getElementById('test-result').style.display = 'none';
-    
-    // 使用AJAX调用后端脚本
+
     var xhr = new XMLHttpRequest();
     xhr.open('POST', 'mysql/database_connection.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    
+
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
-            // 恢复按钮状态
             testButton.innerHTML = originalText;
             testButton.disabled = false;
-            
+
             try {
                 var response = JSON.parse(xhr.responseText);
-                
+
                 if (response.success) {
-                    // 显示成功结果
                     var message = response.message + '<br>';
                     if (response.details && response.details.length > 0) {
                         message += '<br><strong>操作详情：</strong><ul>';
@@ -600,22 +643,19 @@ function testDatabaseConnection() {
                     }
                     showTestResult('success', message);
                 } else {
-                    // 显示错误结果
                     showTestResult('error', response.message);
                 }
             } catch (e) {
-                // 显示解析错误
                 showTestResult('error', '测试过程中发生错误：' + e.message);
             }
         }
     };
-    
-    // 发送请求
-    var params = 'mysql_enabled=' + mysql_enabled + 
-                 '&mysql_host=' + encodeURIComponent(mysql_host) + 
-                 '&mysql_port=' + encodeURIComponent(mysql_port) + 
-                 '&mysql_db=' + encodeURIComponent(mysql_db) + 
-                 '&mysql_user=' + encodeURIComponent(mysql_user) + 
+
+    var params = 'mysql_enabled=' + mysql_enabled +
+                 '&mysql_host=' + encodeURIComponent(mysql_host) +
+                 '&mysql_port=' + encodeURIComponent(mysql_port) +
+                 '&mysql_db=' + encodeURIComponent(mysql_db) +
+                 '&mysql_user=' + encodeURIComponent(mysql_user) +
                  '&mysql_password=' + encodeURIComponent(mysql_password);
     xhr.send(params);
 }
@@ -624,61 +664,247 @@ function testDatabaseConnection() {
 function showTestResult(type, message) {
     var resultDiv = document.getElementById('test-result');
     resultDiv.style.display = 'block';
-    
-    // 设置样式
+
     if (type === 'success') {
-        resultDiv.style.backgroundColor = '#d4edda';
-        resultDiv.style.color = '#155724';
-        resultDiv.style.border = '1px solid #c3e6cb';
+        resultDiv.className = 'test-result test-success';
     } else {
-        resultDiv.style.backgroundColor = '#f8d7da';
-        resultDiv.style.color = '#721c24';
-        resultDiv.style.border = '1px solid #f5c6cb';
+        resultDiv.className = 'test-result test-error';
     }
-    
-    // 设置内容
+
     resultDiv.innerHTML = message;
-    
-    // 滚动到结果区域
+
     resultDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 </script>
 
 <style>
-/* 选项卡样式 */
-.tab-navigation {
-    display: flex;
-    margin-bottom: 20px;
-    border-bottom: 1px solid #ddd;
-}
+    /* 设置页面专用样式 */
+    .status-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        border-radius: var(--radius-md);
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
 
-.tab-button {
-    background-color: #f1f1f1;
-    border: none;
-    border-bottom: 3px solid transparent;
-    padding: 10px 20px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: all 0.3s ease;
-}
+    .status-row.status-success {
+        background-color: #ECFDF5;
+    }
 
-.tab-button:hover {
-    background-color: #ddd;
-}
+    .status-row.status-error {
+        background-color: #FEF2F2;
+    }
 
-.tab-button.active {
-    background-color: white;
-    border-bottom-color: #4CAF50;
-    font-weight: bold;
-}
+    .status-row.status-info {
+        background-color: var(--bg-active);
+    }
 
-.tab-content {
-    display: none;
-}
+    .status-row.status-warning {
+        background-color: #FFFBEB;
+    }
 
-.tab-content.active {
-    display: block;
-}
+    .status-label {
+        font-weight: 600;
+        min-width: 100px;
+    }
+
+    .status-success {
+        color: #059669;
+        font-weight: 600;
+    }
+
+    .status-error {
+        color: #dc2626;
+        font-weight: 600;
+    }
+
+    .warning-list {
+        margin-top: 8px;
+        margin-left: 20px;
+    }
+
+    /* 选项卡样式 */
+    .tab-navigation {
+        display: flex;
+        margin-bottom: 20px;
+        border-bottom: 2px solid var(--border-color);
+        gap: 4px;
+    }
+
+    .tab-button {
+        background-color: var(--bg-page);
+        border: none;
+        border-bottom: 3px solid transparent;
+        padding: 12px 24px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        font-weight: 500;
+        transition: all var(--transition-fast);
+        color: var(--text-secondary);
+        border-radius: var(--radius-md) var(--radius-md) 0 0;
+    }
+
+    .tab-button:hover {
+        background-color: var(--bg-hover);
+        color: var(--text-primary);
+    }
+
+    .tab-button.active {
+        background-color: var(--bg-card);
+        border-bottom-color: var(--primary-color);
+        color: var(--primary-color);
+        font-weight: 600;
+    }
+
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    /* 表单样式 */
+    .form-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 20px;
+    }
+
+    .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .checkbox-row label {
+        font-weight: normal;
+    }
+
+    .tip-box {
+        margin-top: 12px;
+        padding: 12px;
+        background-color: var(--bg-active);
+        border-radius: var(--radius-md);
+        font-size: 0.85rem;
+    }
+
+    .tip-list {
+        margin: 8px 0 0 20px;
+        padding: 0;
+    }
+
+    .tip-list li {
+        margin-bottom: 4px;
+        color: var(--text-secondary);
+    }
+
+    .status-summary {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 12px;
+        background-color: var(--bg-page);
+        border-radius: var(--radius-md);
+    }
+
+    .status-summary > div {
+        display: flex;
+        gap: 8px;
+        font-size: 0.9rem;
+    }
+
+    .status-summary span {
+        font-weight: 600;
+        min-width: 100px;
+        color: var(--text-secondary);
+    }
+
+    .info-list {
+        margin-left: 20px;
+    }
+
+    .info-list li {
+        margin-bottom: 8px;
+    }
+
+    .code-block {
+        background-color: var(--bg-page);
+        padding: 12px;
+        border-radius: var(--radius-md);
+        overflow-x: auto;
+        font-family: 'SF Mono', 'Consolas', monospace;
+        font-size: 0.8rem;
+        margin: 8px 0;
+    }
+
+    /* 测试结果 */
+    .test-result {
+        margin-bottom: 16px;
+        padding: 14px;
+        border-radius: var(--radius-md);
+        font-size: 0.9rem;
+        display: none;
+    }
+
+    .test-success {
+        background-color: #ECFDF5;
+        color: var(--success-dark);
+        border: 1px solid #A7F3D0;
+    }
+
+    .test-error {
+        background-color: #FEF2F2;
+        color: var(--danger-dark);
+        border: 1px solid #FECACA;
+    }
+
+    @media (max-width: 768px) {
+        .status-row {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .status-label {
+            min-width: auto;
+        }
+
+        .tab-navigation {
+            flex-direction: column;
+            border-bottom: none;
+        }
+
+        .tab-button {
+            border-radius: var(--radius-md);
+            border-bottom: none;
+            border-left: 3px solid transparent;
+        }
+
+        .tab-button.active {
+            border-left-color: var(--primary-color);
+            border-bottom: none;
+        }
+
+        .form-actions {
+            flex-direction: column;
+        }
+
+        .form-actions input[type="submit"],
+        .form-actions .btn {
+            width: 100%;
+        }
+
+        .status-summary > div {
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .status-summary span {
+            min-width: auto;
+        }
+    }
 </style>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>
