@@ -17,12 +17,25 @@ require_once __DIR__ . DS . 'includes/hardware_detection.php';
 $system_info = detect_system();
 $gpu_info = $system_info['gpu'];
 
-// 获取本地版本号
-$local_version = 'V2606.1313.1852';
+// 读取版本信息
+$version_file = __DIR__ . DIRECTORY_SEPARATOR . 'version.json';
+$version_info = [
+    'version' => 'Unknown',
+    'release_date' => '',
+    'download_url' => '',
+    'changelog_url' => '',
+    'github_api' => ''
+];
+if (file_exists($version_file)) {
+    $version_data = json_decode(file_get_contents($version_file), true);
+    if ($version_data) {
+        $version_info = array_merge($version_info, $version_data);
+    }
+}
+$local_version = $version_info['version'];
 
 // 从GitHub获取最新版本号
-function get_github_latest_version() {
-    $url = 'https://api.github.com/repos/OsGits/FFmpegPHP/releases/latest';
+function get_github_latest_version($api_url) {
     $context = stream_context_create([
         'http' => [
             'method' => 'GET',
@@ -32,7 +45,7 @@ function get_github_latest_version() {
         ]
     ]);
     
-    $response = @file_get_contents($url, false, $context);
+    $response = @file_get_contents($api_url, false, $context);
     if ($response) {
         $data = json_decode($response, true);
         if (isset($data['tag_name'])) {
@@ -42,7 +55,7 @@ function get_github_latest_version() {
     return null;
 }
 
-$latest_version = get_github_latest_version();
+$latest_version = get_github_latest_version($version_info['github_api']);
 $has_update = ($latest_version && version_compare(str_replace('V', '', $latest_version), str_replace('V', '', $local_version), '>'));
 ?>
 
@@ -98,17 +111,20 @@ $has_update = ($latest_version && version_compare(str_replace('V', '', $latest_v
     <div class="card">
         <h2>版本信息</h2>
         <div>
-            <strong>本地版本:</strong> <?php echo htmlspecialchars($local_version); ?><br>
+            <strong>本地版本:</strong> <?php echo htmlspecialchars($local_version); ?>
+            <?php if (!empty($version_info['release_date'])): ?>
+                <span style="color: #666;"> (发布于 <?php echo htmlspecialchars($version_info['release_date']); ?>)</span>
+            <?php endif; ?><br>
             <strong>最新版本:</strong> <?php echo $latest_version ? htmlspecialchars($latest_version) : '获取失败'; ?>
             <?php if ($has_update): ?>
                 <span style="color: red; font-weight: bold;"> [有更新]</span>
             <?php elseif ($latest_version): ?>
                 <span style="color: green;"> [已是最新]</span>
             <?php endif; ?><br>
-            <strong>下载:</strong> <a href="https://github.com/OsGits/FFmpegPHP/releases" target="_blank" style="color: #0366d6; text-decoration: none;">GitHub 最新发布</a>
+            <strong>下载:</strong> <a href="<?php echo htmlspecialchars($version_info['download_url']); ?>" target="_blank" style="color: #0366d6; text-decoration: none;">GitHub 最新发布</a>
         </div>
         <div style="margin-top: 10px; color: #666;">
-            更新内容：需要自行到GitHub查看更新日志
+            更新日志：<a href="<?php echo htmlspecialchars($version_info['changelog_url']); ?>" target="_blank" style="color: #0366d6;">查看更新记录</a>
         </div>
     </div>
 

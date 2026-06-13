@@ -2,7 +2,7 @@
 
 FFmpegPHP 是一个基于 PHP + FFmpeg 构建的视频转码切片系统，专门用于将本地视频文件转换为 HLS (HTTP Live Streaming) 流媒体格式。
 
-**更新日志**: [查看完整更新记录](https://github.com/OsGits/FFmpegPHP/tree/main/Upgrade%20log)
+**更新日志**: [查看完整更新记录](https://github.com/OsGits/FFmpegPHP/tree/main/UpgradeLog)
 
 <br />
 

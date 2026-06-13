@@ -1,0 +1,10 @@
+{
+    "version": "V2606.1313.1852",
+    "release_date": "2026-06-13",
+    "download_url": "https://github.com/OsGits/FFmpegPHP/releases",
+    "changelog_url": "https://github.com/OsGits/FFmpegPHP/UpgradeLog",
+    "github_repo": "https://github.com/OsGits/FFmpegPHP",
+    "github_api": "https://api.github.com/repos/OsGits/FFmpegPHP/releases/latest",
+    "author": "OsGits",
+    "license": "MIT"
+}

@@ -20,7 +20,5 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
-/*.json
-/data/config.json
 /data/config.php
 
