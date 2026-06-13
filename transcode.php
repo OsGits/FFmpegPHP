@@ -117,7 +117,7 @@ $paged_files = array_slice($server_files, $start_index, $page_size);
                     <?php if ($is_transcoding): ?>
                         <button type="button" class="btn btn-secondary" disabled>批量转码</button>
                     <?php else: ?>
-                        <button type="submit" class="btn btn-primary">批量转码</button>
+                        <span class="tip-text">可定时访问 <a href="z.php">z.php</a> 实现自动转码功能</span>
                     <?php endif; ?>
                 </div>
                 <ul class="file-list">
@@ -322,6 +322,20 @@ document.querySelectorAll('.single-transcode-btn').forEach(function(button) {
     .btn-sm {
         padding: 6px 12px;
         font-size: 0.8rem;
+    }
+
+    .tip-text {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+
+    .tip-text a {
+        color: var(--primary);
+        text-decoration: none;
+    }
+
+    .tip-text a:hover {
+        text-decoration: underline;
     }
 
     @media (max-width: 768px) {
