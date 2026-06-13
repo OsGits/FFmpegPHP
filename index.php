@@ -121,7 +121,12 @@ $has_update = ($latest_version && version_compare(str_replace('V', '', $latest_v
             <?php elseif ($latest_version): ?>
                 <span style="color: green;"> [已是最新]</span>
             <?php endif; ?><br>
-            <strong>下载:</strong> <a href="<?php echo htmlspecialchars($version_info['download_url']); ?>" target="_blank" style="color: #0366d6; text-decoration: none;">GitHub 最新发布</a>
+            <?php if ($has_update): ?>
+                <div style="margin-top: 10px;">
+                    <a href="update.php" class="btn" style="background: #4CAF50; color: white; padding: 8px 15px; border-radius: 4px; text-decoration: none; font-size: 14px; margin-right: 10px;">在线更新</a>
+                    <a href="<?php echo htmlspecialchars($version_info['download_url']); ?>" target="_blank" style="background: #666; color: white; padding: 8px 15px; border-radius: 4px; text-decoration: none; font-size: 14px;">离线下载</a>
+                </div>
+            <?php endif; ?>
         </div>
         <div style="margin-top: 10px; color: #666;">
             更新日志：<a href="<?php echo htmlspecialchars($version_info['changelog_url']); ?>" target="_blank" style="color: #0366d6;">查看更新记录</a>

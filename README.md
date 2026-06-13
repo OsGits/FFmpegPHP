@@ -25,6 +25,10 @@ FFmpegPHP 是一个基于 PHP + FFmpeg 构建的视频转码切片系统，专�
 - FFmpeg 5.0+（需配置到系统 PATH 或在设置中指定路径）
 - Windows/Linux 操作系统
 - Web 服务器（Apache、Nginx、IIS）
+- MySQL 数据库（可选）
+- (重要)需要对 `exec()` PHP 函数进行配置，确保可以执行 FFmpeg 命令行工具。
+- (重要)需要让全局权限都有 "www" 用户的可写权限。
+
 
 ### PHP 函数禁用配置
 
