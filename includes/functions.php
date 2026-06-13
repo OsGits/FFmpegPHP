@@ -953,24 +953,14 @@ function process_single_file($file, $output_dir, $base_url, $segment_duration, $
     $video_duration = '未知';
 
     try {
-        // 读取配置文件 - 使用 data 目录下的配置文件
-        $configFile = safe_path(ROOT_DIR . DS . 'data' . DS . 'config.json');
+        // 使用已加载的配置（config.php 中已加载）
+        global $config;
         
-        error_log('数据库配置文件路径: ' . ($configFile ?: '未找到'));
-        
-        if ($configFile && file_exists($configFile)) {
-            $configContent = @file_get_contents($configFile);
-            $config = @json_decode($configContent, true);
-            
-            error_log('配置文件内容: ' . ($configContent ? '已读取' : '空内容'));
-            error_log('配置解析结果: ' . ($config ? '成功' : '失败'));
-            
-            if ($config) {
-                error_log('mysql_enabled配置值: ' . ($config['mysql_enabled'] ?? '未设置'));
-            }
+        if ($config && isset($config['mysql_enabled'])) {
+            error_log('mysql_enabled配置值: ' . ($config['mysql_enabled'] ?? '未设置'));
 
             // 检查数据库功能是否启用
-            if (isset($config['mysql_enabled']) && $config['mysql_enabled'] == 1) {
+            if ($config['mysql_enabled'] == 1) {
                 error_log('数据库功能已启用，开始保存视频信息');
                 
                 // 包含数据库操作类
@@ -1037,10 +1027,10 @@ function process_single_file($file, $output_dir, $base_url, $segment_duration, $
                 error_log('数据库功能未启用 (mysql_enabled != 1)');
             }
         } else {
-            error_log('配置文件不存在');
+            error_log('配置文件不存在或格式错误');
             $db_save_result = [
                 'success' => false,
-                'message' => '配置文件不存在: ' . $configFile
+                'message' => '配置文件不存在或格式错误'
             ];
         }
     } catch (Exception $e) {

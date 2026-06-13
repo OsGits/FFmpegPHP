@@ -11,12 +11,10 @@ class Database {
         require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'includes/functions.php';
         
         if ($config === null) {
-            // 读取配置文件
-            $configFile = safe_path(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'config.json');
-            if (file_exists($configFile)) {
-                $config = json_decode(file_get_contents($configFile), true);
-            } else {
-                throw new Exception('配置文件不存在');
+            // 使用已加载的配置
+            global $config;
+            if (empty($config)) {
+                throw new Exception('配置文件不存在或格式错误');
             }
         }
         

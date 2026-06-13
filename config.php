@@ -7,45 +7,10 @@ define('ROOT_DIR', __DIR__);
 // 跨平台路径分隔符常量
 define('DS', DIRECTORY_SEPARATOR);
 
-// 定义可能的配置文件位置
-$possible_config_locations = [
-    __DIR__ . DS . 'config.json',              // 根目录（首选）
-    __DIR__ . DS . 'data' . DS . 'config.json', // data目录
-];
+// 配置文件路径（保存配置时使用）
+define('CONFIG_FILE_PATH', __DIR__ . DS . 'data' . DS . 'config.php');
 
-// 查找存在的配置文件，或者使用第一个可写的位置
-$config_file = null;
-$used_location = 0;
-foreach ($possible_config_locations as $i => $location) {
-    if (file_exists($location)) {
-        $config_file = $location;
-        $used_location = $i;
-        break;
-    }
-}
-
-// 如果没有找到存在的文件，找第一个可写的位置
-if ($config_file === null) {
-    foreach ($possible_config_locations as $i => $location) {
-        $dir = dirname($location);
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0755, true);
-        }
-        if (is_dir($dir) && is_writable($dir)) {
-            $config_file = $location;
-            $used_location = $i;
-            break;
-        }
-    }
-}
-
-// 如果找不到可写位置，就使用第一个位置（只读模式）
-if ($config_file === null) {
-    $config_file = $possible_config_locations[0];
-}
-
-// 读取配置
-$config = [];
+// 默认配置
 $default_config = [
     'ffmpeg_path' => 'ffmpeg',
     'ffprobe_path' => 'ffprobe',
@@ -54,7 +19,7 @@ $default_config = [
     'base_url' => '',
     'segment_duration' => 10,
     'screenshot_time' => 10,
-    'quality' => '1080p',
+    'quality' => 'original',
     'use_gpu' => 0,
     'mysql_enabled' => 0,
     'mysql_host' => 'localhost',
@@ -65,23 +30,46 @@ $default_config = [
     'm3u8_full_url' => ''
 ];
 
-if (file_exists($config_file)) {
-    $content = @file_get_contents($config_file);
-    $config = json_decode($content, true) ?? [];
-    // 合并默认配置，确保所有配置项都存在
-    $config = array_merge($default_config, $config);
-} else {
-    $config = $default_config;
-    // 尝试创建配置文件
-    $dir = dirname($config_file);
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0755, true);
+// 定义可能的配置文件位置（按优先级排序）
+$possible_config_locations = [
+    __DIR__ . DS . 'data' . DS . 'config.php',    // PHP 配置（首选，安全）
+    __DIR__ . DS . 'data' . DS . 'config.json',   // JSON 配置（兼容旧版本）
+    __DIR__ . DS . 'config.json',                 // 根目录 JSON（备用）
+];
+
+// 查找存在的配置文件
+$config_file = null;
+$config_format = 'php';
+
+foreach ($possible_config_locations as $location) {
+    if (file_exists($location)) {
+        $config_file = $location;
+        $config_format = (strpos($location, '.php') !== false) ? 'php' : 'json';
+        break;
     }
-    @file_put_contents($config_file, json_encode($default_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 }
 
-// 定义配置文件路径常量供其他文件使用
-define('CONFIG_FILE_PATH', $config_file);
+// 读取配置
+$config = $default_config;
+
+if ($config_file !== null && file_exists($config_file)) {
+    if ($config_format === 'php') {
+        // 读取 PHP 配置
+        $saved_config = [];
+        @include $config_file;
+        if (isset($saved_config) && is_array($saved_config)) {
+            // 合并默认配置，确保所有配置项都存在
+            $config = array_merge($default_config, $saved_config);
+        }
+    } else {
+        // 读取 JSON 配置
+        $content = @file_get_contents($config_file);
+        $loaded_config = json_decode($content, true) ?? [];
+        // 合并默认配置，确保所有配置项都存在
+        $config = array_merge($default_config, $loaded_config);
+    }
+}
+// 如果没有配置文件，使用默认配置（不自动创建文件）
 
 // 待转码目录
 $input_dir = $config['input_dir'] ?? './vodoss/';
@@ -98,7 +86,7 @@ define('OUTPUT_DIR', ROOT_DIR . DS . $output_dir);
 // FFmpeg 路径配置
 // 方法1：如果已添加到系统PATH，可直接使用 'ffmpeg'
 // 方法2：指定完整路径，例如：'C:/ffmpeg/bin/ffmpeg.exe'
-// 方法3：通过设置页面配置（保存在config.json中）
+// 方法3：通过设置页面配置（保存在 config.php 中）
 // 优先使用前端设置的路径，默认值为'ffmpeg'
 define('FFMPEG_PATH', $config['ffmpeg_path'] ?? 'ffmpeg');
 define('FFPROBE_PATH', $config['ffprobe_path'] ?? 'ffprobe');

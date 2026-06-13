@@ -1,6 +1,13 @@
 <?php
 // 设置管理脚本
 
+// 检查是否需要安装（如果没有配置文件，重定向到安装页面）
+$config_file = __DIR__ . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'config.php';
+if (!file_exists($config_file)) {
+    header('Location: install.php');
+    exit;
+}
+
 // 加载配置和硬件检测
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . DS . 'includes/functions.php';
@@ -11,22 +18,46 @@ $system_info = detect_system();
 $gpu_info = $system_info['gpu'];
 
 // 使用 config.php 中定义的配置文件路径
-$config_file = defined('CONFIG_FILE_PATH') ? CONFIG_FILE_PATH : safe_path(__DIR__ . DS . 'config.json');
+$config_file = defined('CONFIG_FILE_PATH') ? CONFIG_FILE_PATH : safe_path(__DIR__ . DS . 'data' . DS . 'config.php');
+
+// 判断配置文件格式
+function get_config_format($config_file) {
+    if (strpos($config_file, '.php') !== false) {
+        return 'php';
+    }
+    return 'json';
+}
 
 // 读取现有配置
 function read_config() {
     global $config_file;
+    global $config; // 使用 config.php 中已加载的配置
+    $config_format = get_config_format($config_file);
+    
     if (file_exists($config_file)) {
-        $content = @file_get_contents($config_file);
-        return json_decode($content, true) ?? [];
+        if ($config_format === 'php') {
+            // 读取 PHP 配置
+            $saved_config = [];
+            @include $config_file;
+            if (isset($saved_config) && is_array($saved_config)) {
+                return $saved_config;
+            }
+            return [];
+        } else {
+            // 读取 JSON 配置
+            $content = @file_get_contents($config_file);
+            $loaded = json_decode($content, true) ?? [];
+            return $loaded;
+        }
     }
-    return [];
+    // 如果没有配置文件，返回已加载的默认配置
+    return $config ?? [];
 }
 
 // 保存配置
 function save_config($config) {
     global $config_file;
-    $content = json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $config_format = get_config_format($config_file);
     
     // 检查目录是否可写
     $dir = dirname($config_file);
@@ -38,8 +69,27 @@ function save_config($config) {
         return false;
     }
     
-    // 尝试保存
-    $result = @file_put_contents($config_file, $content);
+    $result = false;
+    
+    if ($config_format === 'php') {
+        // 保存为 PHP 配置
+        $php_content = '<?php
+/**
+ * 配置文件 - PHP 格式
+ * 此文件包含敏感信息，请确保 Web 服务器禁止直接访问 .php 文件
+ *
+ * 配置将通过设置页面自动管理
+ */
+
+$saved_config = ' . var_export($config, true) . ';
+';
+        $result = @file_put_contents($config_file, $php_content);
+    } else {
+        // 保存为 JSON 配置
+        $content = json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        $result = @file_put_contents($config_file, $content);
+    }
+    
     return $result !== false;
 }
 
@@ -369,25 +419,31 @@ $ffprobe_status = test_ffprobe_path($current_ffprobe_path) ? '可用' : '不可�
                     <strong>手动修改配置文件：</strong>
                     <p>创建配置文件并填入以下内容：</p>
                     <p><strong>配置文件位置：</strong><?php echo htmlspecialchars($config_file); ?></p>
-                    <p><strong>config.json 格式示例：</strong></p>
-                    <pre style="background: #f5f5f5; padding: 10px; border: 1px solid #ddd; border-radius: 4px; overflow-x: auto;">{
-    "ffmpeg_path": "ffmpeg",
-    "ffprobe_path": "ffprobe",
-    "input_dir": "./vodoss/",
-    "output_dir": "./m3u8/",
-    "base_url": "",
-    "segment_duration": 10,
-    "screenshot_time": 10,
-    "quality": "1080p",
-    "use_gpu": 0,
-    "mysql_enabled": 0,
-    "mysql_host": "localhost",
-    "mysql_port": "3306",
-    "mysql_db": "vod_system",
-    "mysql_user": "root",
-    "mysql_password": "",
-    "m3u8_full_url": ""
-}</pre>
+                    <p><strong>config.php 格式示例：</strong></p>
+                    <pre style="background: #f5f5f5; padding: 10px; border: 1px solid #ddd; border-radius: 4px; overflow-x: auto;">&lt;?php
+/**
+ * 配置文件 - PHP 格式
+ * 此文件包含敏感信息，请确保 Web 服务器禁止直接访问 .php 文件
+ */
+
+$saved_config = [
+    'ffmpeg_path' =&gt; 'ffmpeg',
+    'ffprobe_path' =&gt; 'ffprobe',
+    'input_dir' =&gt; './vodoss/',
+    'output_dir' =&gt; './m3u8/',
+    'base_url' =&gt; '',
+    'segment_duration' =&gt; 10,
+    'screenshot_time' =&gt; 10,
+    'quality' =&gt; 'original',
+    'use_gpu' =&gt; 0,
+    'mysql_enabled' =&gt; 0,
+    'mysql_host' =&gt; 'localhost',
+    'mysql_port' =&gt; '3306',
+    'mysql_db' =&gt; 'vod_system',
+    'mysql_user' =&gt; 'root',
+    'mysql_password' =&gt; '',
+    'm3u8_full_url' =&gt; '',
+];
                 </li>
             </ol>
         </div>

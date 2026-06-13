@@ -1,6 +1,13 @@
 <?php
 // 视频处理核心脚本 - 跨平台优化版
 
+// 检查是否需要安装（如果没有配置文件，重定向到安装页面）
+$config_file = __DIR__ . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'config.php';
+if (!file_exists($config_file)) {
+    header('Location: install.php');
+    exit;
+}
+
 // 加载配置和函数
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . DS . 'includes/functions.php';

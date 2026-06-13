@@ -1,6 +1,13 @@
 <?php
 // 后台管理首页
 
+// 检查是否需要安装（如果没有配置文件，重定向到安装页面）
+$config_file = __DIR__ . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'config.php';
+if (!file_exists($config_file)) {
+    header('Location: install.php');
+    exit;
+}
+
 // 加载配置和函数
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . DS . 'includes/functions.php';
@@ -63,7 +70,7 @@ $gpu_info = $system_info['gpu'];
     <div class="card">
         <h2>版本信息</h2>
         <div>
-            <strong>版本:</strong> V2606.1110.0021<br>
+            <strong>版本:</strong> V2606.1313.1852<br>
             <strong>下载:</strong> <a href="https://github.com/OsGits/FFmpegPHP/releases" target="_blank" style="color: #0366d6; text-decoration: none;">GitHub</a>
         </div>
         <div style="margin-top: 10px; color: #666;">
