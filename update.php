@@ -513,6 +513,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     <li>更新前需要想对全文件夹和文件设置 <strong>WWW用户777权限</strong> 来确保更新过程中的写入操作。</li>
                     <li>更新前系统会自动创建备份</li>
                     <li>配置文件和用户数据不会被影响</li>
+                    <li>如果提示有更新文件失败，可直接覆盖离线包中的文件！<a href="https://github.com/OsGits/FFmpegPHP/releases" target="_blank">下载离线包</a></li>
                 </ul>
             </div>
             
