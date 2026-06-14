@@ -213,16 +213,16 @@ function execute_ffmpeg($command, &$output = null, &$error = null) {
 }
 
 // 视频转码切割
-function transcode_video($input_file, $output_dir, $segment_duration = 10, $quality = '1080p', $gpu_method = 'none', $random_string = null) {
+function transcode_video($input_file, $output_dir, $segment_duration = 10, $quality = '1080p', $gpu_method = 'none', $random_string = null, $skip_head_seconds = 0) {
     global $video_quality, $gpu_acceleration;
-    
+
     // 确保输出目录存在
     ensure_dir($output_dir);
-    
+
     // 安全处理路径
     $input_file = safe_path($input_file);
     $output_dir = safe_path($output_dir);
-    
+
     // 生成输出文件名 - 使用随机字符串.m3u8
     if ($random_string) {
         $filename = $random_string;
@@ -231,35 +231,41 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
         $filename = pathinfo($input_file, PATHINFO_FILENAME);
     }
     $output_file = safe_path($output_dir . DS . $filename . '.m3u8');
-    
+
     // 获取视频信息，用于调试
     $video_info = get_video_info($input_file);
     error_log('Input video info: ' . json_encode($video_info));
-    
+
     // 生成TS文件名格式 - 序号制度，例如：000001.ts
     $ts_filename_pattern = safe_path($output_dir . DS . '%06d.ts');
-    
+
+    // 构建跳过片头参数
+    $seek_param = '';
+    if ($skip_head_seconds > 0) {
+        $seek_param = "-ss $skip_head_seconds";
+    }
+
     // 如果选择源画质，直接使用 -c copy 复制流，不转码
     if ($quality === 'original') {
         error_log('使用源画质模式，直接复制流不转码');
-        $command = "-i \"$input_file\" -c copy -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        $command = "$seek_param -i \"$input_file\" -c copy -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         $gpu_method = 'none'; // 复制流不需要GPU加速
     } else {
         // 构建FFmpeg转码命令
         $quality_param = $video_quality[$quality] ?? $video_quality['1080p'];
-        
+
         // 构建基础命令，让FFmpeg自动处理输入编码
         // 只指定输出编码器，不指定输入编码器
-        $base_command = "-i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
-        
+        $base_command = "$seek_param -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+
         // 根据GPU加速方法和画质调整命令
         if (!empty($quality_param)) {
-            $base_command = "-i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+            $base_command = "$seek_param -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         }
-        
+
         // 根据GPU加速方法调整命令
         $command = $base_command;
-        
+
         // 检查GPU方法是否适用于当前平台
         $is_gpu_available = true;
         if ($gpu_method !== 'none') {
@@ -270,41 +276,41 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
                 $gpu_method = 'none';
             }
         }
-        
+
         if ($is_gpu_available && $gpu_method === 'cuda') {
             // NVIDIA CUDA加速 (Windows/Linux)
             if (empty($quality_param)) {
-                $command = "-hwaccel cuda -i \"$input_file\" -c:v h264_nvenc -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+                $command = "-hwaccel cuda $seek_param -i \"$input_file\" -c:v h264_nvenc -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
             } else {
-                $command = "-hwaccel cuda -i \"$input_file\" -c:v h264_nvenc $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+                $command = "-hwaccel cuda $seek_param -i \"$input_file\" -c:v h264_nvenc $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
             }
         } elseif ($is_gpu_available && $gpu_method === 'amf') {
             // AMD AMF加速 (仅Windows)
             if (empty($quality_param)) {
-                $command = "-hwaccel amf -i \"$input_file\" -c:v h264_amf -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+                $command = "-hwaccel amf $seek_param -i \"$input_file\" -c:v h264_amf -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
             } else {
-                $command = "-hwaccel amf -i \"$input_file\" -c:v h264_amf $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+                $command = "-hwaccel amf $seek_param -i \"$input_file\" -c:v h264_amf $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
             }
         } elseif ($is_gpu_available && $gpu_method === 'dxva2') {
             // DXVA2加速 (仅Windows)
             if (empty($quality_param)) {
-                $command = "-hwaccel dxva2 -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+                $command = "-hwaccel dxva2 $seek_param -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
             } else {
-                $command = "-hwaccel dxva2 -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+                $command = "-hwaccel dxva2 $seek_param -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
             }
         } elseif ($is_gpu_available && $gpu_method === 'd3d11va') {
             // D3D11VA加速 (仅Windows)
             if (empty($quality_param)) {
-                $command = "-hwaccel d3d11va -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+                $command = "-hwaccel d3d11va $seek_param -i \"$input_file\" -c:v libx264 -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
             } else {
-                $command = "-hwaccel d3d11va -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+                $command = "-hwaccel d3d11va $seek_param -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
             }
         } elseif ($is_gpu_available && $gpu_method === 'vaapi' && !IS_WINDOWS) {
             // VAAPI加速 (仅Linux)
             if (empty($quality_param)) {
-                $command = "-hwaccel vaapi -i \"$input_file\" -c:v h264_vaapi -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+                $command = "-hwaccel vaapi $seek_param -i \"$input_file\" -c:v h264_vaapi -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
             } else {
-                $command = "-hwaccel vaapi -i \"$input_file\" -c:v h264_vaapi $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+                $command = "-hwaccel vaapi $seek_param -i \"$input_file\" -c:v h264_vaapi $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
             }
         }
     }
@@ -322,7 +328,7 @@ function transcode_video($input_file, $output_dir, $segment_duration = 10, $qual
         error_log('源画质模式失败，回退到转码模式');
         $quality = '1080p';
         $quality_param = $video_quality[$quality] ?? $video_quality['1080p'];
-        $base_command = "-i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
+        $base_command = "$seek_param -i \"$input_file\" -c:v libx264 $quality_param -c:a aac -hls_time $segment_duration -hls_list_size 0 -hls_segment_filename \"$ts_filename_pattern\" -f hls \"$output_file\"";
         $command = $base_command;
         $output = [];
         $error = '';
@@ -794,11 +800,12 @@ function clear_transcode_records() {
 
 /**
  * 处理单个视频文件的转码
- * 
+ *
  * @param string $file 视频文件名
  * @param string $output_dir 输出目录
  * @param string $base_url TS文件路径前缀
  * @param int $segment_duration 切片时长
+ * @param int $skip_head_seconds 跳过片头秒数
  * @param int $screenshot_time 截图时间点
  * @param string $quality 画质
  * @param bool $use_gpu 是否使用GPU加速
@@ -806,7 +813,7 @@ function clear_transcode_records() {
  * @param bool $exit_on_error 是否在错误时exit（process.php中true，z.php中false）
  * @return array|void 返回处理结果
  */
-function process_single_file($file, $output_dir, $base_url, $segment_duration, $screenshot_time, $quality, $use_gpu, $show_html = true, $exit_on_error = true) {
+function process_single_file($file, $output_dir, $base_url, $segment_duration, $skip_head_seconds, $screenshot_time, $quality, $use_gpu, $show_html = true, $exit_on_error = true) {
     // 保存源文件的文件名（用于数据库和json记录）
     $original_filename = $file;
     
@@ -900,6 +907,7 @@ function process_single_file($file, $output_dir, $base_url, $segment_duration, $
     $transcode_options = [
         'base_url' => $base_url,
         'segment_duration' => $segment_duration,
+        'skip_head_seconds' => $skip_head_seconds,
         'screenshot_time' => $screenshot_time,
         'quality' => $quality,
         'use_gpu' => $use_gpu,
@@ -911,7 +919,7 @@ function process_single_file($file, $output_dir, $base_url, $segment_duration, $
     $start_time = microtime(true);
     
     // 执行转码
-    $transcode_result = transcode_video($input_path, $final_output_dir_gbk, $segment_duration, $quality, $transcode_method, $random_dir_name);
+    $transcode_result = transcode_video($input_path, $final_output_dir_gbk, $segment_duration, $quality, $transcode_method, $random_dir_name, $skip_head_seconds);
     
     // 检查转码是否成功
     if (isset($transcode_result['error'])) {

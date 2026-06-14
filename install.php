@@ -51,6 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $config['output_dir'] = $_POST['output_dir'] ?? './m3u8/';
     $config['base_url'] = $_POST['base_url'] ?? '';
     $config['segment_duration'] = (int)($_POST['segment_duration'] ?? 10);
+    $config['skip_head_seconds'] = (int)($_POST['skip_head_seconds'] ?? 0);
     $config['screenshot_time'] = (int)($_POST['screenshot_time'] ?? 10);
     $config['quality'] = $_POST['quality'] ?? 'original';
     $config['use_gpu'] = isset($_POST['use_gpu']) ? 1 : 0;
@@ -462,6 +463,12 @@ $saved_config = ' . var_export($config, true) . ';
                     </div>
 
                     <div class="form-group">
+                        <label for="skip_head_seconds">跳过片头 (秒)</label>
+                        <input type="number" id="skip_head_seconds" name="skip_head_seconds" value="0" min="0" max="3600">
+                        <small>转码时跳过视频片头多少秒，默认为0秒</small>
+                    </div>
+
+                    <div class="form-group">
                         <label for="screenshot_time">截图时间点 (秒)</label>
                         <input type="number" id="screenshot_time" name="screenshot_time" value="10" min="0">
                         <small>视频截图的时间点，默认为10秒</small>
@@ -493,7 +500,7 @@ $saved_config = ' . var_export($config, true) . ';
                             <input type="checkbox" id="mysql_enabled" name="mysql_enabled" value="1">
                             启用MySQL数据库
                         </label>
-                        <small>勾选后启用MySQL数据库功能</small>
+                        <small>可以后期在设置页填写数据库信息!勾选后,转码的数据信息,将被记录到MySql数据库中!</small>
                     </div>
 
                     <div class="form-group">

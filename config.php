@@ -18,6 +18,7 @@ $default_config = [
     'output_dir' => './m3u8/',
     'base_url' => '',
     'segment_duration' => 10,
+    'skip_head_seconds' => 0,
     'screenshot_time' => 10,
     'quality' => 'original',
     'use_gpu' => 0,
@@ -100,6 +101,7 @@ $allowed_extensions = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv'];
 // 读取配置文件中的转码参数
 $base_url = $config['base_url'] ?? '';
 $default_segment_duration = $config['segment_duration'] ?? 10;
+$default_skip_head_seconds = $config['skip_head_seconds'] ?? 0;
 $default_screenshot_time = $config['screenshot_time'] ?? 10;
 $default_quality = $config['quality'] ?? '1080p';
 $default_use_gpu = $config['use_gpu'] ?? 0;

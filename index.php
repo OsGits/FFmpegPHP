@@ -121,6 +121,10 @@ $has_update = ($latest_version && version_compare(str_replace('V', '', $latest_v
             <span><?php echo $default_segment_duration; ?> 秒</span>
         </div>
         <div class="status-item">
+            <span class="status-label">跳过片头:</span>
+            <span><?php echo $default_skip_head_seconds; ?> 秒</span>
+        </div>
+        <div class="status-item">
             <span class="status-label">截图时间点:</span>
             <span><?php echo $default_screenshot_time; ?> 秒</span>
         </div>

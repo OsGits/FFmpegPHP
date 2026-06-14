@@ -27,6 +27,7 @@ $input_file = $_POST['input_file'] ?? '';
 $output_dir = $_POST['output_dir'] ?? 'm3u8';
 $base_url = $_POST['base_url'] ?? '';
 $segment_duration = (int)($_POST['segment_duration'] ?? 10);
+$skip_head_seconds = (int)($_POST['skip_head_seconds'] ?? 0);
 $screenshot_time = (int)($_POST['screenshot_time'] ?? 10);
 $quality = $_POST['quality'] ?? '1080p';
 $use_gpu = isset($_POST['use_gpu']) && $_POST['use_gpu'] === '1';
@@ -61,7 +62,7 @@ if ($is_batch_transcode) {
         }
         
         // 处理单个文件（不显示HTML，不exit）
-        process_single_file($file, $output_dir, $base_url, $segment_duration, $screenshot_time, $quality, $use_gpu, false, false);
+        process_single_file($file, $output_dir, $base_url, $segment_duration, $skip_head_seconds, $screenshot_time, $quality, $use_gpu, false, false);
         
         sleep(1);
     }
@@ -72,7 +73,7 @@ if ($is_batch_transcode) {
 }
 
 // 单个文件转码处理
-process_single_file($input_file, $output_dir, $base_url, $segment_duration, $screenshot_time, $quality, $use_gpu, true, true);
+process_single_file($input_file, $output_dir, $base_url, $segment_duration, $skip_head_seconds, $screenshot_time, $quality, $use_gpu, true, true);
 
 sleep(2);
 header('Location: history.php');

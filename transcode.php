@@ -75,6 +75,10 @@ $paged_files = array_slice($server_files, $start_index, $page_size);
                 <span><?php echo $default_segment_duration; ?> 秒</span>
             </div>
             <div class="setting-row">
+                <span class="setting-label">跳过片头:</span>
+                <span><?php echo $default_skip_head_seconds; ?> 秒</span>
+            </div>
+            <div class="setting-row">
                 <span class="setting-label">截图时间点:</span>
                 <span><?php echo $default_screenshot_time; ?> 秒</span>
             </div>
@@ -110,6 +114,7 @@ $paged_files = array_slice($server_files, $start_index, $page_size);
                     <input type="hidden" name="batch_transcode" value="1">
                     <input type="hidden" name="base_url" value="<?php echo htmlspecialchars($base_url); ?>">
                     <input type="hidden" name="segment_duration" value="<?php echo $default_segment_duration; ?>">
+                    <input type="hidden" name="skip_head_seconds" value="<?php echo $default_skip_head_seconds; ?>">
                     <input type="hidden" name="screenshot_time" value="<?php echo $default_screenshot_time; ?>">
                     <input type="hidden" name="quality" value="<?php echo $default_quality; ?>">
                     <input type="hidden" name="use_gpu" value="<?php echo $default_use_gpu; ?>">
@@ -196,6 +201,7 @@ document.querySelectorAll('.single-transcode-btn').forEach(function(button) {
             'input_file': file,
             'base_url': '<?php echo htmlspecialchars($base_url); ?>',
             'segment_duration': '<?php echo $default_segment_duration; ?>',
+            'skip_head_seconds': '<?php echo $default_skip_head_seconds; ?>',
             'screenshot_time': '<?php echo $default_screenshot_time; ?>',
             'quality': '<?php echo $default_quality; ?>',
             'use_gpu': '<?php echo $default_use_gpu; ?>',

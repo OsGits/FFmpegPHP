@@ -49,12 +49,13 @@ if (!empty($current_task)) {
         
         $base_url = $config['base_url'] ?? '';
         $segment_duration = $config['segment_duration'] ?? 10;
+        $skip_head_seconds = $config['skip_head_seconds'] ?? 0;
         $screenshot_time = $config['screenshot_time'] ?? 10;
         $quality = $config['quality'] ?? '1080p';
         $output_dir = 'm3u8';
         $use_gpu = isset($config['use_gpu']) && $config['use_gpu'] == 1;
-        
-        process_single_file($selected_file, $output_dir, $base_url, $segment_duration, $screenshot_time, $quality, $use_gpu, true, false);
+
+        process_single_file($selected_file, $output_dir, $base_url, $segment_duration, $skip_head_seconds, $screenshot_time, $quality, $use_gpu, true, false);
     } else {
         echo '<div class="info">vodoss目录中没有找到视频文件</div>';
     }

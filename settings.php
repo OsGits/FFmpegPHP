@@ -155,6 +155,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['segment_duration'])) {
             $config['segment_duration'] = $_POST['segment_duration'] ?? 10;
         }
+        if (isset($_POST['skip_head_seconds'])) {
+            $config['skip_head_seconds'] = $_POST['skip_head_seconds'] ?? 0;
+        }
         if (isset($_POST['screenshot_time'])) {
             $config['screenshot_time'] = $_POST['screenshot_time'] ?? 10;
         }
@@ -208,6 +211,7 @@ $current_input_dir = $current_config['input_dir'] ?? './vodoss/';
 $current_output_dir = $current_config['output_dir'] ?? './m3u8/';
 $current_base_url = $current_config['base_url'] ?? '';
 $current_segment_duration = $current_config['segment_duration'] ?? 10;
+$current_skip_head_seconds = $current_config['skip_head_seconds'] ?? 0;
 $current_screenshot_time = $current_config['screenshot_time'] ?? 10;
 $current_quality = $current_config['quality'] ?? '1080p';
 $current_use_gpu = $current_config['use_gpu'] ?? 0;
@@ -304,7 +308,7 @@ $ffprobe_status = test_ffprobe_path($current_ffprobe_path) ? '可用' : '不可�
     <!-- 选项卡导航 -->
     <div class="tab-navigation">
         <button class="tab-button active" onclick="openTab(event, 'basic-settings')">基础设置</button>
-        <button class="tab-button" onclick="openTab(event, 'database-settings')">数据库</button>
+        <button class="tab-button" onclick="openTab(event, 'database-settings')">数据库(选填)</button>
         <button class="tab-button" onclick="openTab(event, 'password-settings')">修改密码</button>
     </div>
 
@@ -347,13 +351,19 @@ $ffprobe_status = test_ffprobe_path($current_ffprobe_path) ? '可用' : '不可�
                 <label for="base_url">TS文件路径设置(必填)</label>
                 <input type="text" id="base_url" name="base_url" value="<?php echo htmlspecialchars($current_base_url); ?>" placeholder="例如: http://your-domain/output/ 结尾加'/'">
                 <small>TS文件的基础访问地址，会添加到m3u8文件中的每个TS文件路径前！</small>
-                <small>最终在m3u8文件中合成的路径为：http(s)://TS文件基础地址/转码后保存目录/m3u8/视频文件名/index.m3u8</small>
+                <small>最终在m3u8文件中合成的路径为：http(s)://你设置的域名+路径/m3u8/日期/随机文件名/index.m3u8</small>
             </div>
 
             <div class="form-group">
                 <label for="segment_duration">切片时长 (秒)</label>
                 <input type="number" id="segment_duration" name="segment_duration" value="<?php echo $current_segment_duration; ?>" min="1" max="60">
                 <small>每个TS切片的时长，默认为10秒</small>
+            </div>
+
+            <div class="form-group">
+                <label for="skip_head_seconds">跳过片头 (秒)</label>
+                <input type="number" id="skip_head_seconds" name="skip_head_seconds" value="<?php echo $current_skip_head_seconds; ?>" min="0" max="3600">
+                <small>转码时跳过视频片头多少秒，默认为0秒</small>
             </div>
 
             <div class="form-group">
@@ -399,6 +409,7 @@ $ffprobe_status = test_ffprobe_path($current_ffprobe_path) ? '可用' : '不可�
                     <div><span>转码后目录:</span> <code><?php echo htmlspecialchars($current_output_dir); ?></code></div>
                     <div><span>基础地址:</span> <code><?php echo htmlspecialchars($current_base_url); ?></code></div>
                     <div><span>切片时长:</span> <?php echo $current_segment_duration; ?> 秒</div>
+                    <div><span>跳过片头:</span> <?php echo $current_skip_head_seconds; ?> 秒</div>
                     <div><span>截图时间点:</span> <?php echo $current_screenshot_time; ?> 秒</div>
                     <div><span>画质选择:</span> <?php echo $current_quality; ?></div>
                     <div><span>使用GPU加速:</span> <?php echo ($current_use_gpu == 1 ? '是' : '否'); ?></div>
@@ -486,7 +497,7 @@ $saved_config = [
                     <input type="checkbox" id="mysql_enabled" name="mysql_enabled" value="1" <?php echo $current_mysql_enabled == 1 ? 'checked' : ''; ?>>
                     <label for="mysql_enabled">启用MySQL数据库</label>
                 </div>
-                <small>勾选后启用MySQL数据库功能</small>
+                <small>勾选后,转码的数据信息,将被记录到MySql数据库中!</small>
             </div>
 
             <div class="form-group">
@@ -539,8 +550,11 @@ $saved_config = [
             </div>
 
             <div class="form-actions">
-                <input type="submit" value="保存设置">
-                <button type="button" onclick="testDatabaseConnection()" class="btn btn-success">测试连接</button>
+                <div class="tip-text-wrapper">保存前,务必先点击"测试连接"</div>
+                <div class="btn-group">
+                    <input type="submit" value="保存设置">
+                    <button type="button" onclick="testDatabaseConnection()" class="btn btn-success">测试连接</button>
+                </div>
             </div>
             </form>
         </div>
@@ -769,8 +783,19 @@ function showTestResult(type, message) {
     /* 表单样式 */
     .form-actions {
         display: flex;
+        flex-direction: column;
         gap: 12px;
         margin-top: 20px;
+    }
+
+    .btn-group {
+        display: flex;
+        gap: 12px;
+    }
+
+    .tip-text-wrapper {
+        color: var(--warning-dark, #d97706);
+        font-size: 0.9rem;
     }
 
     .checkbox-row {
