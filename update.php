@@ -75,12 +75,12 @@ function create_backup() {
             $file_path = $file->getPathname();
             // 跳过不需要备份的目录和文件
             if (is_dir($file_path)) continue;
-            if (strpos($file_path, 'backup') !== false) continue;
-            if (strpos($file_path, 'vodoss') !== false) continue;
-            if (strpos($file_path, 'm3u8') !== false) continue;
-            if (strpos($file_path, 'data' . DIRECTORY_SEPARATOR . 'config.php') !== false) continue;
-            if (strpos($file_path, 'ting.json') !== false) continue;
-            
+            if (strpos($file_path, DIRECTORY_SEPARATOR . 'backup' . DIRECTORY_SEPARATOR) !== false) continue;
+            if (strpos($file_path, DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR) !== false) continue;
+            if (strpos($file_path, DIRECTORY_SEPARATOR . 'm3u8' . DIRECTORY_SEPARATOR) !== false) continue;
+            if (strpos($file_path, DIRECTORY_SEPARATOR . 'vodoss' . DIRECTORY_SEPARATOR) !== false) continue;
+            if (strpos($file_path, DIRECTORY_SEPARATOR . 'ZmFinish' . DIRECTORY_SEPARATOR) !== false) continue;
+
             $relative_path = str_replace(__DIR__ . DIRECTORY_SEPARATOR, '', $file_path);
             $zip->addFile($file_path, $relative_path);
         }
